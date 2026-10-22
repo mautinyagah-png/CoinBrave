@@ -23,6 +23,8 @@ const CB_NOTIF_PREFIX  = "cb_notif_";
 const CB_HISTORY_PREFIX= "cb_history_";
 const CB_THEME_KEY     = "cb_theme";
 const CB_REWARDS_PREFIX= "cb_rewards_";
+const CB_RECENT_KEY    = "cb_recent";
+const CB_LOGIN_ATTEMPTS= "cb_login_attempts";
 
 const CB_EMOJIS = ["🦁","🐂","🐻","🦊","🐺","🐯","🦄","🐳","🦈","🐬","🦅","🐉","🚀","💎","🌙","⭐","🔥","🎯","🎨","🧠"];
 
@@ -104,6 +106,35 @@ function cbPasswordStrength(pw) {
   return { level: "strong", label: "Strong", score: 3 };
 }
 
+// ---- Login rate limiting ----
+function cbGetLoginAttempts() { try { return JSON.parse(localStorage.getItem(CB_LOGIN_ATTEMPTS) || "{}"); } catch { return {}; } }
+function cbRecordFailedAttempt(email) {
+  const attempts = cbGetLoginAttempts();
+  attempts[email] = (attempts[email] || 0) + 1;
+  localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts));
+  return attempts[email];
+}
+function cbResetLoginAttempts(email) {
+  const attempts = cbGetLoginAttempts();
+  delete attempts[email];
+  localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts));
+}
+function cbIsLockedOut(email) {
+  const attempts = cbGetLoginAttempts();
+  const count = attempts[email] || 0;
+  if (count >= 3) {
+    const attemptsFull = cbGetLoginAttempts();
+    if (!attemptsFull[email + "_until"] || Date.now() > attemptsFull[email + "_until"]) {
+      attemptsFull[email + "_until"] = Date.now() + 30 * 1000;
+      localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attemptsFull));
+    }
+    const remaining = Math.ceil((attemptsFull[email + "_until"] - Date.now()) / 1000);
+    if (remaining > 0) return remaining;
+    else { cbResetLoginAttempts(email); return 0; }
+  }
+  return 0;
+}
+
 function cbGetFavorites() { try { return JSON.parse(localStorage.getItem(CB_FAV_KEY) || "[]"); } catch { return []; } }
 function cbSaveFavorites(l) { localStorage.setItem(CB_FAV_KEY, JSON.stringify(l)); }
 function cbToggleFavorite(id) {
@@ -113,6 +144,16 @@ function cbToggleFavorite(id) {
   cbSaveFavorites(f);
   return f.includes(id);
 }
+
+// ---- Recently viewed ----
+function cbGetRecent() { try { return JSON.parse(localStorage.getItem(CB_RECENT_KEY) || "[]"); } catch { return []; } }
+function cbPushRecent(coin) {
+  if (!coin || !coin.id) return;
+  const list = cbGetRecent().filter(c => c.id !== coin.id);
+  list.unshift({ id: coin.id, name: coin.name, symbol: coin.symbol, image: coin.image, price: coin.current_price, change: coin.price_change_percentage_24h });
+  cbSaveRecent(list.slice(0, 5));
+}
+function cbSaveRecent(l) { localStorage.setItem(CB_RECENT_KEY, JSON.stringify(l)); }
 
 function cbFormatPrice(p) {
   if (p == null || isNaN(p)) return "—";
@@ -126,7 +167,6 @@ function cbFormatSigned(n, decimals) {
   return sign + "$" + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
 }
 
-// ---- Sparkline (needed by app.js and market.js) ----
 function cbSparkline(prices, width, height, up) {
   width = width || 60; height = height || 24;
   if (!prices || prices.length < 2) return "";
@@ -176,9 +216,20 @@ function cbAddNotification(email, n) {
   n.read = false;
   l.unshift(n);
   cbSaveNotifications(email, l);
+  cbUpdateBellBadge();
 }
-function cbMarkNotificationsRead(email) { cbSaveNotifications(email, cbGetNotifications(email).map(n => ({ ...n, read: true }))); }
+function cbMarkNotificationsRead(email) { cbSaveNotifications(email, cbGetNotifications(email).map(n => ({ ...n, read: true }))); cbUpdateBellBadge(); }
 function cbUnreadNotificationsCount(email) { return cbGetNotifications(email).filter(n => !n.read).length; }
+
+function cbUpdateBellBadge() {
+  const user = cbCurrentUser();
+  const badge = document.getElementById("cbBellBadge");
+  if (!badge) return;
+  if (!user) { badge.style.display = "none"; return; }
+  const count = cbUnreadNotificationsCount(user.email);
+  if (count > 0) { badge.textContent = count > 99 ? "99+" : count; badge.style.display = "flex"; }
+  else badge.style.display = "none";
+}
 
 function cbCheckAlerts(coins) {
   const user = cbCurrentUser();
@@ -316,7 +367,7 @@ async function cbOpenFundsModal(mode, onSuccess) {
   modal.innerHTML = `
     <div class="modal">
       <div class="modal-header">
-        <h3 id="cbFundsTitle">${mode === "deposit" ? "Deposit" : "Withdraw"}</h3>
+        <h3>${mode === "deposit" ? "Deposit" : "Withdraw"}</h3>
         <button class="modal-close" id="cbFundsClose">×</button>
       </div>
       <div class="modal-body">
@@ -360,11 +411,9 @@ async function cbOpenFundsModal(mode, onSuccess) {
     const asset = selEl.value;
     const amt = parseFloat(amtEl.value) || 0;
     errEl.classList.remove("show");
-
     if (asset === "usd") {
       const avail = wallet.usd || 0;
-      if (mode === "withdraw") infoEl.innerHTML = `Available: <b>$${avail.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`;
-      else infoEl.innerHTML = `Current cash: <b>$${avail.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`;
+      infoEl.innerHTML = `Available: <b>$${avail.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`;
     } else {
       const coin = market.find(c => c.id === asset);
       if (!coin) { infoEl.textContent = ""; return; }
@@ -372,7 +421,7 @@ async function cbOpenFundsModal(mode, onSuccess) {
       const usdVal = amt * coin.current_price;
       const lines = [`1 ${coin.symbol.toUpperCase()} = ${cbFormatPrice(coin.current_price)}`];
       if (amt > 0) lines.push(`Total: <b>$${usdVal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`);
-      if (mode === "withdraw") lines.push(`Available: <b>${avail.toLocaleString()} ${coin.symbol.toUpperCase()}</b>`);
+      lines.push(`Available: <b>${avail.toLocaleString()} ${coin.symbol.toUpperCase()}</b>`);
       infoEl.innerHTML = lines.join("<br>");
     }
   }
@@ -387,9 +436,7 @@ async function cbOpenFundsModal(mode, onSuccess) {
     const asset = selEl.value;
     const amt = parseFloat(amtEl.value);
     const showErr = (m) => { errEl.textContent = m; errEl.classList.add("show"); };
-
     if (!amt || amt <= 0 || isNaN(amt)) return showErr("Enter a valid amount.");
-
     const w = cbGetWallet(user.email) || {};
 
     if (mode === "deposit") {
@@ -397,12 +444,11 @@ async function cbOpenFundsModal(mode, onSuccess) {
         w.usd = +((w.usd || 0) + amt).toFixed(2);
         cbSaveWallet(user.email, w);
         cbAddTransaction(user.email, { type: "deposit", total: amt, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
-        cbAddNotification(user.email, { type: "deposit", title: `Deposited $${amt.toFixed(2)}`, body: "Added to your cash balance." });
+        cbAddNotification(user.email, { type: "deposit", title: `Deposited $${amt.toFixed(2)}`, body: "Added to cash." });
       } else {
         const coin = market.find(c => c.id === asset);
         if (!coin) return showErr("Asset unavailable.");
-        const oldQty = w[asset] || 0;
-        w[asset] = +(oldQty + amt).toFixed(8);
+        w[asset] = +((w[asset] || 0) + amt).toFixed(8);
         cbSaveWallet(user.email, w);
         cbUpdateAvgOnBuy(user.email, asset, amt, coin.current_price);
         const usd = amt * coin.current_price;
@@ -443,6 +489,7 @@ function cbRenderNav() {
   const path = (location.pathname.split("/").pop() || "");
   const isHome = (path === "" || path === "index.html") ? "active" : "";
   const is = (p) => path === p ? "active" : "";
+  const unread = user ? cbUnreadNotificationsCount(user.email) : 0;
 
   const nav = document.querySelector(".nav");
   if (nav) {
@@ -452,6 +499,7 @@ function cbRenderNav() {
         <a href="market.html" class="${is('market.html')}">Market</a>
         <a href="trade.html" class="${is('trade.html')}">Trade</a>
         <a href="wallet.html" class="${is('wallet.html')}">Assets</a>
+        <a href="notifications.html" class="cb-bell" title="Notifications" style="position:relative;font-size:1.1rem;padding:6px 10px">🔔<span id="cbBellBadge" class="bell-badge" style="${unread>0?'':'display:none'}">${unread>99?'99+':unread}</span></a>
         <a href="#" id="logoutBtn" class="btn-signup">Log Out</a>`;
       document.getElementById("logoutBtn").addEventListener("click", (e) => { e.preventDefault(); cbLogout(); });
     } else {
@@ -470,6 +518,7 @@ function cbRenderNav() {
     if (!userArea) { userArea = document.createElement("div"); userArea.id = "topbarUser"; userArea.className = "topbar-user"; topbar.appendChild(userArea); }
     if (user) {
       userArea.innerHTML = `
+        <a href="notifications.html" class="cb-bell" title="Notifications" style="position:relative;font-size:1.15rem;padding:6px 10px;color:var(--text)">🔔<span class="bell-badge" style="${unread>0?'':'display:none'}">${unread>99?'99+':unread}</span></a>
         <div class="user-chip">${cbRenderAvatarHTML(user, 22)} <span>${user.name}</span></div>
         <a href="#" id="logoutBtnMobile" class="btn-signup">Log Out</a>`;
       document.getElementById("logoutBtnMobile").addEventListener("click", (e) => { e.preventDefault(); cbLogout(); });
@@ -524,12 +573,18 @@ function cbRenderProfileDrawer(user) {
         <a href="signup.html" class="drawer-item"><span class="drawer-icon">✨</span><span>Sign Up</span></a>
       </nav>`;
   } else {
+    const w = cbGetWallet(user.email) || {};
+    const cash = w.usd || 0;
     const unread = cbUnreadNotificationsCount(user.email);
     drawer.innerHTML = `
       <div class="drawer-header">
         <div class="drawer-avatar">${cbRenderAvatarHTML(user, 48)}</div>
         <div class="drawer-info"><div class="drawer-name">${user.name}</div><div class="drawer-id">${user.userId}</div></div>
         <button class="drawer-close" id="cbDrawerClose">×</button>
+      </div>
+      <div style="padding:12px 20px;border-bottom:1px solid var(--border);font-size:0.85rem">
+        <div class="muted" style="margin-bottom:4px">Cash balance</div>
+        <div style="font-weight:700;color:var(--accent);font-size:1.1rem">$${cash.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
       </div>
       <nav class="drawer-menu">
         <a href="index.html" class="drawer-item"><span class="drawer-icon">🏠</span><span>Home</span></a>
@@ -540,8 +595,6 @@ function cbRenderProfileDrawer(user) {
         <a href="notifications.html" class="drawer-item"><span class="drawer-icon">🔔</span><span>Notifications</span>${unread > 0 ? `<span class="notif-badge">${unread}</span>` : ""}</a>
         <a href="settings.html" class="drawer-item"><span class="drawer-icon">⚙️</span><span>Settings</span></a>
         <a href="about.html" class="drawer-item"><span class="drawer-icon">ℹ️</span><span>About</span></a>
-        <a href="privacy.html" class="drawer-item"><span class="drawer-icon">🔒</span><span>Privacy</span></a>
-        <a href="terms.html" class="drawer-item"><span class="drawer-icon">📄</span><span>Terms</span></a>
         <button id="cbDrawerLogout" class="drawer-item drawer-logout"><span class="drawer-icon">🚪</span><span>Log Out</span></button>
       </nav>`;
     document.getElementById("cbDrawerLogout").addEventListener("click", cbLogout);
