@@ -1,46 +1,20 @@
-// CoinBrave shared helpers
-
-// ---- auto-inject favicon / manifest / theme meta ----
-(function cbInjectHead() {
+// ---- auto-inject head + footer ----
+(function cbInject() {
   if (typeof document === 'undefined') return;
-  if (!document.querySelector('link[rel="icon"]')) {
-    const f = document.createElement('link');
-    f.rel = 'icon'; f.type = 'image/svg+xml'; f.href = 'favicon.svg';
-    document.head.appendChild(f);
-  }
-  if (!document.querySelector('link[rel="apple-touch-icon"]')) {
-    const a = document.createElement('link');
-    a.rel = 'apple-touch-icon'; a.href = 'favicon.svg';
-    document.head.appendChild(a);
-  }
-  if (!document.querySelector('link[rel="manifest"]')) {
-    const m = document.createElement('link');
-    m.rel = 'manifest'; m.href = 'manifest.json';
-    document.head.appendChild(m);
-  }
-  if (!document.querySelector('meta[name="theme-color"]')) {
-    const t = document.createElement('meta');
-    t.name = 'theme-color'; t.content = '#0b0e11';
-    document.head.appendChild(t);
-  }
-  if (!document.querySelector('meta[name="apple-mobile-web-app-capable"]')) {
-    const m1 = document.createElement('meta');
-    m1.name = 'apple-mobile-web-app-capable'; m1.content = 'yes';
-    document.head.appendChild(m1);
-    const m2 = document.createElement('meta');
-    m2.name = 'apple-mobile-web-app-status-bar-style'; m2.content = 'black-translucent';
-    document.head.appendChild(m2);
-  }
+  const add = (tag, attrs) => { const el = document.createElement(tag); Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v)); document.head.appendChild(el); };
+  if (!document.querySelector('link[rel="icon"]')) add('link', { rel: 'icon', type: 'image/svg+xml', href: 'favicon.svg' });
+  if (!document.querySelector('link[rel="apple-touch-icon"]')) add('link', { rel: 'apple-touch-icon', href: 'favicon.svg' });
+  if (!document.querySelector('link[rel="manifest"]')) add('link', { rel: 'manifest', href: 'manifest.json' });
+  if (!document.querySelector('meta[name="theme-color"]')) add('meta', { name: 'theme-color', content: '#0b0e11' });
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
-    });
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
 })();
 
 const CB_USERS_KEY     = "cb_users";
 const CB_SESSION_KEY   = "cb_session";
 const CB_WALLET_PREFIX = "cb_wallet_";
+const CB_AVG_PREFIX    = "cb_avg_";
 const CB_FAV_KEY       = "cb_favorites";
 const CB_REDIRECT_KEY  = "cb_redirect";
 const CB_TX_PREFIX     = "cb_tx_";
@@ -48,13 +22,14 @@ const CB_ALERTS_PREFIX = "cb_alerts_";
 const CB_NOTIF_PREFIX  = "cb_notif_";
 const CB_HISTORY_PREFIX= "cb_history_";
 const CB_THEME_KEY     = "cb_theme";
+const CB_REWARDS_PREFIX= "cb_rewards_";
 
 const CB_EMOJIS = ["🦁","🐂","🐻","🦊","🐺","🐯","🦄","🐳","🦈","🐬","🦅","🐉","🚀","💎","🌙","⭐","🔥","🎯","🎨","🧠"];
 
 function cbGetUsers() { try { return JSON.parse(localStorage.getItem(CB_USERS_KEY) || "[]"); } catch { return []; } }
-function cbSaveUsers(users) { localStorage.setItem(CB_USERS_KEY, JSON.stringify(users)); }
+function cbSaveUsers(u) { localStorage.setItem(CB_USERS_KEY, JSON.stringify(u)); }
 function cbGetSession() { return localStorage.getItem(CB_SESSION_KEY); }
-function cbSetSession(email) { localStorage.setItem(CB_SESSION_KEY, email); }
+function cbSetSession(e) { localStorage.setItem(CB_SESSION_KEY, e); }
 function cbClearSession() { localStorage.removeItem(CB_SESSION_KEY); }
 
 function cbCurrentUser() {
@@ -78,18 +53,35 @@ function cbEnsureUserFields(user) {
 }
 
 function cbGetWallet(email) { try { return JSON.parse(localStorage.getItem(CB_WALLET_PREFIX + email) || "null"); } catch { return null; } }
-function cbSaveWallet(email, wallet) { localStorage.setItem(CB_WALLET_PREFIX + email, JSON.stringify(wallet)); }
+function cbSaveWallet(email, w) { localStorage.setItem(CB_WALLET_PREFIX + email, JSON.stringify(w)); }
 
 function cbDefaultWallet() {
-  return {
-    usd: 5000,
-    bitcoin: 0.03,
-    ethereum: 0.5,
-    solana: 5,
-    dogecoin: 5000,
-    cardano: 1000,
-    chainlink: 10
-  };
+  return { usd: 5000, bitcoin: 0.03, ethereum: 0.5, solana: 5, dogecoin: 5000, cardano: 1000, chainlink: 10 };
+}
+function cbDefaultAvgPrices() {
+  return { bitcoin: 82497, ethereum: 2430, solana: 104.55, dogecoin: 0.08, cardano: 0.218, chainlink: 12.17 };
+}
+
+function cbGetAvgPrices(email) { try { return JSON.parse(localStorage.getItem(CB_AVG_PREFIX + email) || "{}"); } catch { return {}; } }
+function cbSaveAvgPrices(email, obj) { localStorage.setItem(CB_AVG_PREFIX + email, JSON.stringify(obj)); }
+
+function cbUpdateAvgOnBuy(email, coinId, qty, price) {
+  const avg = cbGetAvgPrices(email);
+  const wallet = cbGetWallet(email) || {};
+  const oldQty = wallet[coinId] || 0;
+  const oldAvg = avg[coinId] || 0;
+  const totalOld = oldQty * oldAvg;
+  const totalNew = qty * price;
+  const newQty = oldQty + qty;
+  if (newQty > 0) avg[coinId] = (totalOld + totalNew) / newQty;
+  cbSaveAvgPrices(email, avg);
+}
+
+function cbUpdateAvgOnSell(email, coinId) {
+  const wallet = cbGetWallet(email) || {};
+  const avg = cbGetAvgPrices(email);
+  if (!wallet[coinId] || wallet[coinId] <= 0) delete avg[coinId];
+  cbSaveAvgPrices(email, avg);
 }
 
 async function cbHashPassword(password) {
@@ -98,14 +90,28 @@ async function cbHashPassword(password) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+function cbPasswordStrength(pw) {
+  if (!pw || pw.length < 8) return { level: "weak", label: "Too short", score: 1 };
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[a-z]/.test(pw)) score++;
+  if (/\d/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (score <= 3) return { level: "weak", label: "Weak", score: 1 };
+  if (score <= 4) return { level: "medium", label: "Medium", score: 2 };
+  return { level: "strong", label: "Strong", score: 3 };
+}
+
 function cbGetFavorites() { try { return JSON.parse(localStorage.getItem(CB_FAV_KEY) || "[]"); } catch { return []; } }
-function cbSaveFavorites(list) { localStorage.setItem(CB_FAV_KEY, JSON.stringify(list)); }
-function cbToggleFavorite(coinId) {
-  const favs = cbGetFavorites();
-  const idx = favs.indexOf(coinId);
-  if (idx >= 0) favs.splice(idx, 1); else favs.push(coinId);
-  cbSaveFavorites(favs);
-  return favs.includes(coinId);
+function cbSaveFavorites(l) { localStorage.setItem(CB_FAV_KEY, JSON.stringify(l)); }
+function cbToggleFavorite(id) {
+  const f = cbGetFavorites();
+  const i = f.indexOf(id);
+  if (i >= 0) f.splice(i, 1); else f.push(id);
+  cbSaveFavorites(f);
+  return f.includes(id);
 }
 
 function cbFormatPrice(p) {
@@ -114,25 +120,14 @@ function cbFormatPrice(p) {
   if (p >= 0.01) return "$" + p.toFixed(4);
   return "$" + p.toFixed(6);
 }
-
-function cbSparkline(prices, width, height, up) {
-  width = width || 60; height = height || 24;
-  if (!prices || prices.length < 2) return "";
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  const range = max - min || 1;
-  const step = width / (prices.length - 1);
-  const pts = prices.map((p, i) => {
-    const x = i * step;
-    const y = height - ((p - min) / range) * (height - 4) - 2;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-  const color = up ? "var(--up)" : "var(--down)";
-  return `<svg class="sparkline" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+function cbFormatSigned(n, decimals) {
+  const d = decimals == null ? 2 : decimals;
+  const sign = n >= 0 ? "+" : "-";
+  return sign + "$" + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
 }
 
 function cbGetTransactions(email) { try { return JSON.parse(localStorage.getItem(CB_TX_PREFIX + email) || "[]"); } catch { return []; } }
-function cbSaveTransactions(email, list) { localStorage.setItem(CB_TX_PREFIX + email, JSON.stringify(list)); }
+function cbSaveTransactions(email, l) { localStorage.setItem(CB_TX_PREFIX + email, JSON.stringify(l)); }
 function cbAddTransaction(email, tx) {
   const list = cbGetTransactions(email);
   tx.id = "tx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
@@ -143,27 +138,27 @@ function cbAddTransaction(email, tx) {
 }
 
 function cbGetAlerts(email) { try { return JSON.parse(localStorage.getItem(CB_ALERTS_PREFIX + email) || "[]"); } catch { return []; } }
-function cbSaveAlerts(email, list) { localStorage.setItem(CB_ALERTS_PREFIX + email, JSON.stringify(list)); }
-function cbAddAlert(email, alert) {
-  const list = cbGetAlerts(email);
-  alert.id = "al_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
-  alert.createdAt = new Date().toISOString();
-  alert.triggered = false;
-  list.unshift(alert);
-  cbSaveAlerts(email, list);
-  return alert;
+function cbSaveAlerts(email, l) { localStorage.setItem(CB_ALERTS_PREFIX + email, JSON.stringify(l)); }
+function cbAddAlert(email, a) {
+  const l = cbGetAlerts(email);
+  a.id = "al_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+  a.createdAt = new Date().toISOString();
+  a.triggered = false;
+  l.unshift(a);
+  cbSaveAlerts(email, l);
+  return a;
 }
 function cbRemoveAlert(email, id) { cbSaveAlerts(email, cbGetAlerts(email).filter(a => a.id !== id)); }
 
 function cbGetNotifications(email) { try { return JSON.parse(localStorage.getItem(CB_NOTIF_PREFIX + email) || "[]"); } catch { return []; } }
-function cbSaveNotifications(email, list) { localStorage.setItem(CB_NOTIF_PREFIX + email, JSON.stringify(list)); }
-function cbAddNotification(email, notif) {
-  const list = cbGetNotifications(email);
-  notif.id = "n_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
-  notif.timestamp = new Date().toISOString();
-  notif.read = false;
-  list.unshift(notif);
-  cbSaveNotifications(email, list);
+function cbSaveNotifications(email, l) { localStorage.setItem(CB_NOTIF_PREFIX + email, JSON.stringify(l)); }
+function cbAddNotification(email, n) {
+  const l = cbGetNotifications(email);
+  n.id = "n_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+  n.timestamp = new Date().toISOString();
+  n.read = false;
+  l.unshift(n);
+  cbSaveNotifications(email, l);
 }
 function cbMarkNotificationsRead(email) { cbSaveNotifications(email, cbGetNotifications(email).map(n => ({ ...n, read: true }))); }
 function cbUnreadNotificationsCount(email) { return cbGetNotifications(email).filter(n => !n.read).length; }
@@ -185,7 +180,7 @@ function cbCheckAlerts(coins) {
       cbAddNotification(user.email, {
         type: "alert",
         title: `${coin.name} ${a.direction === "above" ? "hit" : "dropped to"} ${cbFormatPrice(a.targetPrice)}`,
-        body: `Current: ${cbFormatPrice(coin.current_price)} · Your ${a.direction} alert for ${cbFormatPrice(a.targetPrice)} triggered.`
+        body: `Current: ${cbFormatPrice(coin.current_price)}`
       });
     }
   }
@@ -193,32 +188,24 @@ function cbCheckAlerts(coins) {
 }
 
 function cbGetHistory(email) { try { return JSON.parse(localStorage.getItem(CB_HISTORY_PREFIX + email) || "[]"); } catch { return []; } }
-function cbSaveHistory(email, list) { localStorage.setItem(CB_HISTORY_PREFIX + email, JSON.stringify(list)); }
+function cbSaveHistory(email, l) { localStorage.setItem(CB_HISTORY_PREFIX + email, JSON.stringify(l)); }
 function cbSnapshotPortfolio(email, totalUsd) {
   if (!email || totalUsd == null || isNaN(totalUsd)) return;
-  const history = cbGetHistory(email);
+  const h = cbGetHistory(email);
   const today = new Date().toISOString().slice(0, 10);
-  const last = history[history.length - 1];
+  const last = h[h.length - 1];
   if (last && last.date === today) last.value = +totalUsd.toFixed(2);
-  else history.push({ date: today, value: +totalUsd.toFixed(2) });
-  if (history.length > 365) history.splice(0, history.length - 365);
-  cbSaveHistory(email, history);
+  else h.push({ date: today, value: +totalUsd.toFixed(2) });
+  if (h.length > 365) h.splice(0, h.length - 365);
+  cbSaveHistory(email, h);
 }
 
 function cbGetTheme() { return localStorage.getItem(CB_THEME_KEY) || "dark"; }
-function cbSetTheme(t) {
-  localStorage.setItem(CB_THEME_KEY, t);
-  if (t === "light") document.body.classList.add("light");
-  else document.body.classList.remove("light");
-}
+function cbSetTheme(t) { localStorage.setItem(CB_THEME_KEY, t); if (t === "light") document.body.classList.add("light"); else document.body.classList.remove("light"); }
 function cbApplyTheme() { cbSetTheme(cbGetTheme()); }
 
 function cbRequireAuth() {
-  if (!cbCurrentUser()) {
-    localStorage.setItem(CB_REDIRECT_KEY, location.href);
-    location.href = "login.html";
-    return false;
-  }
+  if (!cbCurrentUser()) { localStorage.setItem(CB_REDIRECT_KEY, location.href); location.href = "login.html"; return false; }
   return true;
 }
 
@@ -229,48 +216,219 @@ function cbRenderAvatarHTML(user, size) {
   return `<span class="avatar-emoji" style="font-size:${Math.round(s * 0.7)}px">${user.avatarEmoji || "🦁"}</span>`;
 }
 
+// ---- Logout with confirm ----
+function cbLogout() {
+  if (confirm("Log out of CoinBrave?")) { cbClearSession(); location.href = "index.html"; }
+}
+
+// ---- Delete account ----
+function cbDeleteAccount(email) {
+  if (!confirm("Delete your account PERMANENTLY?\n\nAll your wallet, trades, alerts, and settings will be erased forever. This cannot be undone.")) return false;
+  const typed = prompt('Type DELETE (all caps) to confirm:');
+  if (typed !== "DELETE") { alert("Cancelled. Account not deleted."); return false; }
+  const users = cbGetUsers().filter(u => u.email !== email);
+  cbSaveUsers(users);
+  localStorage.removeItem(CB_WALLET_PREFIX + email);
+  localStorage.removeItem(CB_AVG_PREFIX + email);
+  localStorage.removeItem(CB_TX_PREFIX + email);
+  localStorage.removeItem(CB_ALERTS_PREFIX + email);
+  localStorage.removeItem(CB_NOTIF_PREFIX + email);
+  localStorage.removeItem(CB_HISTORY_PREFIX + email);
+  localStorage.removeItem(CB_REWARDS_PREFIX + email);
+  cbClearSession();
+  return true;
+}
+
+// ---- Footer auto-inject ----
+function cbRenderFooter() {
+  if (document.querySelector(".cb-footer")) return;
+  const f = document.createElement("footer");
+  f.className = "cb-footer";
+  f.innerHTML = `
+    <div class="cb-footer-inner">
+      <div class="cb-footer-links">
+        <a href="about.html">About</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms</a>
+        <a href="mailto:support@coinbrave.demo">Contact</a>
+      </div>
+      <div class="cb-footer-copy">© ${new Date().getFullYear()} CoinBrave · Demo project · No real funds</div>
+    </div>`;
+  document.body.appendChild(f);
+}
+
 function cbEnablePullToRefresh(onRefresh) {
   let startY = 0, pulling = false, indicator = null;
-  function ensureIndicator() {
-    if (indicator) return indicator;
-    indicator = document.createElement("div");
-    indicator.className = "ptr-indicator";
-    indicator.innerHTML = '<div class="ptr-spinner"></div>';
-    document.body.appendChild(indicator);
-    return indicator;
-  }
-  document.addEventListener("touchstart", (e) => {
-    if (window.scrollY <= 0 && !pulling) { startY = e.touches[0].clientY; pulling = true; }
-  }, { passive: true });
+  function ensure() { if (indicator) return indicator; indicator = document.createElement("div"); indicator.className = "ptr-indicator"; indicator.innerHTML = '<div class="ptr-spinner"></div>'; document.body.appendChild(indicator); return indicator; }
+  document.addEventListener("touchstart", (e) => { if (window.scrollY <= 0 && !pulling) { startY = e.touches[0].clientY; pulling = true; } }, { passive: true });
   document.addEventListener("touchmove", (e) => {
     if (!pulling) return;
     const dy = e.touches[0].clientY - startY;
-    if (dy > 8) {
-      const ind = ensureIndicator();
-      ind.style.opacity = Math.min(1, dy / 80);
-      ind.style.transform = `translate(-50%, ${Math.min(dy - 30, 30)}px)`;
-    }
+    if (dy > 8) { const ind = ensure(); ind.style.opacity = Math.min(1, dy / 80); ind.style.transform = `translate(-50%, ${Math.min(dy - 30, 30)}px)`; }
     if (dy > 90) {
       pulling = false;
-      const ind = ensureIndicator();
+      const ind = ensure();
       ind.classList.add("active");
       ind.style.opacity = "1";
       ind.style.transform = "translate(-50%, 30px)";
-      Promise.resolve(onRefresh()).finally(() => {
-        setTimeout(() => { ind.classList.remove("active"); ind.style.opacity = ""; ind.style.transform = ""; }, 500);
-      });
+      Promise.resolve(onRefresh()).finally(() => setTimeout(() => { ind.classList.remove("active"); ind.style.opacity = ""; ind.style.transform = ""; }, 500));
     }
   }, { passive: true });
-  document.addEventListener("touchend", () => {
-    if (pulling) {
-      pulling = false;
-      if (indicator) { indicator.style.opacity = ""; indicator.style.transform = ""; }
+  document.addEventListener("touchend", () => { if (pulling) { pulling = false; if (indicator) { indicator.style.opacity = ""; indicator.style.transform = ""; } } }, { passive: true });
+}
+
+// ---- Funds (Deposit/Withdraw) modal ----
+let _cbMarketCache = null, _cbMarketTime = 0;
+async function cbGetMarketForFunds() {
+  if (_cbMarketCache && Date.now() - _cbMarketTime < 5 * 60 * 1000) return _cbMarketCache;
+  const url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=false";
+  let res = await fetch(url);
+  if (!res.ok) res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
+  if (!res.ok) throw new Error("Failed to load market");
+  _cbMarketCache = await res.json();
+  _cbMarketTime = Date.now();
+  return _cbMarketCache;
+}
+
+async function cbOpenFundsModal(mode, onSuccess) {
+  const user = cbCurrentUser();
+  if (!user) { location.href = "signup.html"; return; }
+
+  let existing = document.getElementById("cbFundsModal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "cbFundsModal";
+  modal.className = "modal-overlay hidden";
+  modal.innerHTML = `
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="cbFundsTitle">${mode === "deposit" ? "Deposit" : "Withdraw"}</h3>
+        <button class="modal-close" id="cbFundsClose">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Asset</label>
+          <select id="cbFundsAsset"><option value="usd">USD (Cash)</option></select>
+        </div>
+        <div class="form-group">
+          <label>Amount</label>
+          <input id="cbFundsAmount" type="number" step="any" min="0" placeholder="0.00" />
+        </div>
+        <div id="cbFundsInfo" class="muted" style="font-size:0.85rem;margin-bottom:12px"></div>
+        <div id="cbFundsError" class="form-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="cbFundsConfirm" class="btn-primary">Confirm ${mode === "deposit" ? "Deposit" : "Withdrawal"}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.classList.remove("hidden");
+
+  let market = [];
+  try {
+    market = await cbGetMarketForFunds();
+    const sel = document.getElementById("cbFundsAsset");
+    market.slice(0, 15).forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = `${c.name} (${c.symbol.toUpperCase()})`;
+      sel.appendChild(opt);
+    });
+  } catch (e) { console.error(e); }
+
+  const wallet = cbGetWallet(user.email) || {};
+  const selEl = document.getElementById("cbFundsAsset");
+  const amtEl = document.getElementById("cbFundsAmount");
+  const infoEl = document.getElementById("cbFundsInfo");
+  const errEl = document.getElementById("cbFundsError");
+
+  function updateInfo() {
+    const asset = selEl.value;
+    const amt = parseFloat(amtEl.value) || 0;
+    errEl.classList.remove("show");
+
+    if (asset === "usd") {
+      const avail = wallet.usd || 0;
+      if (mode === "withdraw") {
+        infoEl.innerHTML = `Available: <b>$${avail.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`;
+      } else {
+        infoEl.innerHTML = `Current cash: <b>$${avail.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`;
+      }
+    } else {
+      const coin = market.find(c => c.id === asset);
+      if (!coin) { infoEl.textContent = ""; return; }
+      const avail = wallet[asset] || 0;
+      const usdVal = amt * coin.current_price;
+      const lines = [`1 ${coin.symbol.toUpperCase()} = ${cbFormatPrice(coin.current_price)}`];
+      if (amt > 0) lines.push(`Total: <b>$${usdVal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`);
+      if (mode === "withdraw") lines.push(`Available: <b>${avail.toLocaleString()} ${coin.symbol.toUpperCase()}</b>`);
+      infoEl.innerHTML = lines.join("<br>");
     }
-  }, { passive: true });
+  }
+  selEl.addEventListener("change", updateInfo);
+  amtEl.addEventListener("input", updateInfo);
+  updateInfo();
+
+  document.getElementById("cbFundsClose").addEventListener("click", () => modal.remove());
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+
+  document.getElementById("cbFundsConfirm").addEventListener("click", () => {
+    const asset = selEl.value;
+    const amt = parseFloat(amtEl.value);
+    const showErr = (m) => { errEl.textContent = m; errEl.classList.add("show"); };
+
+    if (!amt || amt <= 0 || isNaN(amt)) return showErr("Enter a valid amount.");
+
+    const w = cbGetWallet(user.email) || {};
+
+    if (mode === "deposit") {
+      if (asset === "usd") {
+        w.usd = +((w.usd || 0) + amt).toFixed(2);
+        cbSaveWallet(user.email, w);
+        cbAddTransaction(user.email, { type: "deposit", total: amt, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
+        cbAddNotification(user.email, { type: "deposit", title: `Deposited $${amt.toFixed(2)}`, body: "Added to your cash balance." });
+      } else {
+        const coin = market.find(c => c.id === asset);
+        if (!coin) return showErr("Asset unavailable.");
+        const oldQty = w[asset] || 0;
+        w[asset] = +(oldQty + amt).toFixed(8);
+        cbSaveWallet(user.email, w);
+        cbUpdateAvgOnBuy(user.email, asset, amt, coin.current_price);
+        const usd = amt * coin.current_price;
+        cbAddTransaction(user.email, { type: "deposit", total: usd, amount: amt, price: coin.current_price, coinId: asset, coinName: coin.name, coinSymbol: coin.symbol, coinImage: coin.image });
+        cbAddNotification(user.email, { type: "deposit", title: `Deposited ${amt} ${coin.symbol.toUpperCase()}`, body: `≈ $${usd.toFixed(2)}` });
+      }
+    } else {
+      if (asset === "usd") {
+        if (amt > (w.usd || 0)) return showErr(`Insufficient. You have $${(w.usd || 0).toFixed(2)}.`);
+        w.usd = +((w.usd || 0) - amt).toFixed(2);
+        cbSaveWallet(user.email, w);
+        cbAddTransaction(user.email, { type: "withdraw", total: amt, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
+        cbAddNotification(user.email, { type: "withdraw", title: `Withdrew $${amt.toFixed(2)}`, body: "Removed from cash." });
+      } else {
+        const coin = market.find(c => c.id === asset);
+        if (!coin) return showErr("Asset unavailable.");
+        const have = w[asset] || 0;
+        if (amt > have + 1e-9) return showErr(`Insufficient. You have ${have} ${coin.symbol.toUpperCase()}.`);
+        w[asset] = +(have - amt).toFixed(8);
+        if (w[asset] <= 0) delete w[asset];
+        cbSaveWallet(user.email, w);
+        cbUpdateAvgOnSell(user.email, asset);
+        const usd = amt * coin.current_price;
+        cbAddTransaction(user.email, { type: "withdraw", total: usd, amount: amt, price: coin.current_price, coinId: asset, coinName: coin.name, coinSymbol: coin.symbol, coinImage: coin.image });
+        cbAddNotification(user.email, { type: "withdraw", title: `Withdrew ${amt} ${coin.symbol.toUpperCase()}`, body: `≈ $${usd.toFixed(2)}` });
+      }
+    }
+
+    modal.remove();
+    if (onSuccess) onSuccess();
+  });
 }
 
 function cbRenderNav() {
   cbApplyTheme();
+  cbRenderFooter();
   const user = cbCurrentUser();
   const path = (location.pathname.split("/").pop() || "");
   const isHome = (path === "" || path === "index.html") ? "active" : "";
@@ -285,7 +443,7 @@ function cbRenderNav() {
         <a href="trade.html" class="${is('trade.html')}">Trade</a>
         <a href="wallet.html" class="${is('wallet.html')}">Assets</a>
         <a href="#" id="logoutBtn" class="btn-signup">Log Out</a>`;
-      document.getElementById("logoutBtn").addEventListener("click", (e) => { e.preventDefault(); cbClearSession(); location.href = "index.html"; });
+      document.getElementById("logoutBtn").addEventListener("click", (e) => { e.preventDefault(); cbLogout(); });
     } else {
       nav.innerHTML = `
         <a href="index.html" class="${isHome}">Home</a>
@@ -304,7 +462,7 @@ function cbRenderNav() {
       userArea.innerHTML = `
         <div class="user-chip">${cbRenderAvatarHTML(user, 22)} <span>${user.name}</span></div>
         <a href="#" id="logoutBtnMobile" class="btn-signup">Log Out</a>`;
-      document.getElementById("logoutBtnMobile").addEventListener("click", (e) => { e.preventDefault(); cbClearSession(); location.href = "index.html"; });
+      document.getElementById("logoutBtnMobile").addEventListener("click", (e) => { e.preventDefault(); cbLogout(); });
     } else {
       userArea.innerHTML = `
         <a href="login.html" class="btn-signup" style="background:var(--bg-hover);color:var(--text) !important">Log In</a>
@@ -343,12 +501,13 @@ function cbRenderProfileDrawer(user) {
     drawer.innerHTML = `
       <div class="drawer-header">
         <div class="drawer-avatar"><span class="avatar-emoji" style="font-size:32px">🧠</span></div>
-        <div class="drawer-info"><div class="drawer-name">Welcome</div><div class="drawer-id">Sign up to unlock your profile</div></div>
+        <div class="drawer-info"><div class="drawer-name">Welcome</div><div class="drawer-id">Sign up to unlock</div></div>
         <button class="drawer-close" id="cbDrawerClose">×</button>
       </div>
       <nav class="drawer-menu">
         <a href="index.html" class="drawer-item"><span class="drawer-icon">🏠</span><span>Home</span></a>
         <a href="market.html" class="drawer-item"><span class="drawer-icon">📊</span><span>Market</span></a>
+        <a href="about.html" class="drawer-item"><span class="drawer-icon">ℹ️</span><span>About</span></a>
         <a href="privacy.html" class="drawer-item"><span class="drawer-icon">🔒</span><span>Privacy</span></a>
         <a href="terms.html" class="drawer-item"><span class="drawer-icon">📄</span><span>Terms</span></a>
         <a href="login.html" class="drawer-item"><span class="drawer-icon">🔑</span><span>Log In</span></a>
@@ -370,11 +529,12 @@ function cbRenderProfileDrawer(user) {
         <a href="referral.html" class="drawer-item"><span class="drawer-icon">🤝</span><span>Referral</span></a>
         <a href="notifications.html" class="drawer-item"><span class="drawer-icon">🔔</span><span>Notifications</span>${unread > 0 ? `<span class="notif-badge">${unread}</span>` : ""}</a>
         <a href="settings.html" class="drawer-item"><span class="drawer-icon">⚙️</span><span>Settings</span></a>
+        <a href="about.html" class="drawer-item"><span class="drawer-icon">ℹ️</span><span>About</span></a>
         <a href="privacy.html" class="drawer-item"><span class="drawer-icon">🔒</span><span>Privacy</span></a>
         <a href="terms.html" class="drawer-item"><span class="drawer-icon">📄</span><span>Terms</span></a>
         <button id="cbDrawerLogout" class="drawer-item drawer-logout"><span class="drawer-icon">🚪</span><span>Log Out</span></button>
       </nav>`;
-    document.getElementById("cbDrawerLogout").addEventListener("click", () => { cbClearSession(); location.href = "index.html"; });
+    document.getElementById("cbDrawerLogout").addEventListener("click", cbLogout);
   }
 
   const closeBtn = document.getElementById("cbDrawerClose");
@@ -389,47 +549,38 @@ function cbRenderProfileDrawer(user) {
 }
 
 function cbOpenDrawer() {
-  const overlay = document.getElementById("cbDrawerOverlay");
-  const drawer = document.getElementById("cbDrawer");
-  if (!overlay || !drawer) return;
-  overlay.classList.remove("hidden");
-  drawer.classList.add("open");
-  document.body.style.overflow = "hidden";
+  const o = document.getElementById("cbDrawerOverlay"), d = document.getElementById("cbDrawer");
+  if (!o || !d) return;
+  o.classList.remove("hidden"); d.classList.add("open"); document.body.style.overflow = "hidden";
 }
 function cbCloseDrawer() {
-  const overlay = document.getElementById("cbDrawerOverlay");
-  const drawer = document.getElementById("cbDrawer");
-  if (!overlay || !drawer) return;
-  overlay.classList.add("hidden");
-  drawer.classList.remove("open");
-  document.body.style.overflow = "";
+  const o = document.getElementById("cbDrawerOverlay"), d = document.getElementById("cbDrawer");
+  if (!o || !d) return;
+  o.classList.add("hidden"); d.classList.remove("open"); document.body.style.overflow = "";
 }
 
 function cbRenderAIHelper() {
   if (document.getElementById("cbAIButton")) return;
   const btn = document.createElement("button");
-  btn.id = "cbAIButton";
-  btn.className = "ai-btn";
-  btn.innerHTML = "🧠";
-  btn.setAttribute("aria-label", "AI Assistant");
-  btn.title = "AI Assistant";
+  btn.id = "cbAIButton"; btn.className = "ai-btn"; btn.innerHTML = "🧠";
+  btn.setAttribute("aria-label", "AI Assistant"); btn.title = "AI Assistant";
 
   const panel = document.createElement("div");
-  panel.id = "cbAIPanel";
-  panel.className = "ai-panel hidden";
+  panel.id = "cbAIPanel"; panel.className = "ai-panel hidden";
   panel.innerHTML = `
     <div class="ai-header"><span>🧠 CoinBrave Assistant</span><button id="cbAIClose" class="ai-close">×</button></div>
     <div class="ai-body">
-      <p class="ai-intro">Hi! I'm your helper. Pick a topic 👇</p>
+      <p class="ai-intro">Hi! Pick a topic 👇</p>
       <div class="ai-chips">
-        <button data-topic="balance">💰 Check my balance</button>
-        <button data-topic="buy">🛒 How do I buy coins?</button>
-        <button data-topic="sell">💸 How do I sell coins?</button>
-        <button data-topic="alerts">🔔 Set a price alert</button>
-        <button data-topic="rewards">🎁 Daily rewards</button>
+        <button data-topic="balance">💰 My balance</button>
+        <button data-topic="buy">🛒 How to buy</button>
+        <button data-topic="sell">💸 How to sell</button>
         <button data-topic="deposit">💵 Deposit / Withdraw</button>
+        <button data-topic="alerts">🔔 Set an alert</button>
+        <button data-topic="rewards">🎁 Daily rewards</button>
+        <button data-topic="pl">📊 What is P/L?</button>
         <button data-topic="install">📲 Install as app</button>
-        <button data-topic="support">📞 Contact support</button>
+        <button data-topic="support">📞 Support</button>
       </div>
       <div id="cbAIAnswer" class="ai-answer"></div>
     </div>`;
@@ -441,22 +592,13 @@ function cbRenderAIHelper() {
     b.addEventListener("click", () => { document.getElementById("cbAIAnswer").innerHTML = cbAIAnswerFor(b.dataset.topic); });
   });
 
-  let dragging = false, moved = false, startX = 0, startY = 0, offX = 0, offY = 0;
-  btn.addEventListener("pointerdown", (e) => {
-    dragging = true; moved = false;
-    startX = e.clientX; startY = e.clientY;
-    const r = btn.getBoundingClientRect();
-    offX = e.clientX - r.left; offY = e.clientY - r.top;
-    btn.setPointerCapture(e.pointerId);
-  });
+  let dragging = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  btn.addEventListener("pointerdown", (e) => { dragging = true; moved = false; sx = e.clientX; sy = e.clientY; const r = btn.getBoundingClientRect(); ox = e.clientX - r.left; oy = e.clientY - r.top; btn.setPointerCapture(e.pointerId); });
   btn.addEventListener("pointermove", (e) => {
     if (!dragging) return;
-    const dx = Math.abs(e.clientX - startX);
-    const dy = Math.abs(e.clientY - startY);
-    if (dx > 5 || dy > 5) moved = true;
+    if (Math.abs(e.clientX - sx) > 5 || Math.abs(e.clientY - sy) > 5) moved = true;
     if (!moved) return;
-    btn.style.left = (e.clientX - offX) + "px";
-    btn.style.top = (e.clientY - offY) + "px";
+    btn.style.left = (e.clientX - ox) + "px"; btn.style.top = (e.clientY - oy) + "px";
     btn.style.right = "auto"; btn.style.bottom = "auto";
   });
   btn.addEventListener("pointerup", (e) => {
@@ -470,16 +612,17 @@ function cbAIAnswerFor(topic) {
   const user = cbCurrentUser();
   switch (topic) {
     case "balance": {
-      if (!user) return `<p>You're not logged in yet. <a href="signup.html">Create an account</a> to start with $10,000 demo funds.</p>`;
+      if (!user) return `<p>Not logged in. <a href="signup.html">Create an account</a> to start with $5,000 cash + coins.</p>`;
       const w = cbGetWallet(user.email) || {};
-      return `<p>You have <b>$${(w.usd || 0).toLocaleString()}</b> in cash. Visit <a href="wallet.html">Assets</a> to see your full portfolio.</p>`;
+      return `<p>You have <b>$${(w.usd || 0).toLocaleString()}</b> in cash. See <a href="wallet.html">Assets</a> for full portfolio.</p>`;
     }
-    case "buy": return `<p>Open <a href="trade.html">Trade</a> → tap <b>Buy</b> on any coin → enter amount → confirm. Fee is 0.1%.</p>`;
-    case "sell": return `<p>Open <a href="trade.html">Trade</a> → tap <b>Sell</b> on a coin you hold → enter amount → confirm.</p>`;
-    case "alerts": return `<p>Go to <a href="settings.html">Settings</a> → <b>Price Alerts</b> → pick a coin, price, and direction.</p>`;
-    case "rewards": return `<p>Visit the <a href="rewards.html">Rewards Hub</a> to claim $5 daily.</p>`;
-    case "deposit": return `<p>Go to <a href="settings.html">Settings → Deposit / Withdraw</a>.</p>`;
-    case "install": return `<p>On mobile, tap your browser's <b>Share</b> menu → <b>Add to Home Screen</b>. On desktop Chrome, look for the <b>install</b> icon in the address bar.</p>`;
+    case "buy": return `<p><a href="trade.html">Trade</a> → tap <b>Buy</b> → enter amount → confirm. Fee 0.1%.</p>`;
+    case "sell": return `<p><a href="trade.html">Trade</a> → tap <b>Sell</b> on a coin you hold.</p>`;
+    case "deposit": return `<p><a href="wallet.html">Assets</a> → <b>Deposit</b> or <b>Withdraw</b>. Pick USD or any coin, enter amount, confirm.</p>`;
+    case "alerts": return `<p><a href="settings.html">Settings</a> → <b>Price Alerts</b> → pick coin, target, direction.</p>`;
+    case "rewards": return `<p><a href="rewards.html">Rewards Hub</a> → claim $5 daily.</p>`;
+    case "pl": return `<p><b>P/L</b> = Profit/Loss. We track your average buy price per coin. Value − Cost = P/L. Green is profit, red is loss.</p>`;
+    case "install": return `<p>On mobile, tap Share → <b>Add to Home Screen</b>. On Chrome desktop, look for the install icon in the address bar.</p>`;
     case "support": return `<p>Email <a href="mailto:support@coinbrave.demo">support@coinbrave.demo</a>.</p>`;
     default: return "";
   }
