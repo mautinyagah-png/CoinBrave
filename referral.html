@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Referral — CoinBrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">
+      <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 1.8 3.6 5.5v6.2c0 5 3.5 9.1 8.4 10.5 4.9-1.4 8.4-5.5 8.4-10.5V5.5L12 1.8z" fill="#f0b90b"/>
+        <path d="M12 5.5 6.6 8v3.7c0 3.1 2.1 5.7 5.4 6.6 3.3-.9 5.4-3.5 5.4-6.6V8L12 5.5z" fill="#0b0e11"/>
+        <text x="12" y="15.3" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="6.2" font-weight="800" fill="#f0b90b">B</text>
+      </svg>
+      <span>CoinBrave</span>
+    </div>
+    <nav class="nav"></nav>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <div style="font-size:3rem;text-align:center;margin-bottom:8px">🤝</div>
+      <h2 style="text-align:center">Refer a Friend</h2>
+      <p class="muted" style="text-align:center;margin-bottom:20px">Share your code. You both earn $5 (demo).</p>
+      <div class="form-group">
+        <label>Your referral code</label>
+        <input id="refCode" type="text" readonly style="font-family:ui-monospace,monospace;text-align:center;font-size:1.1rem;font-weight:600" />
+      </div>
+      <button id="copyBtn" class="btn-primary">Copy Code</button>
+    </section>
+
+    <section class="panel">
+      <h2>How it works</h2>
+      <div class="muted" style="font-size:0.9rem;line-height:1.7">
+        1. Share your code with a friend.<br>
+        2. They enter it when they sign up.<br>
+        3. You both get $5 added to your wallet (demo).
+      </div>
+    </section>
+  </main>
+
+  <script src="auth.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      cbRenderNav();
+      if (!cbRequireAuth()) return;
+      const user = cbCurrentUser();
+      const code = (user.userId || "CB-XXXXXX").replace(/^CB-/, "REF-");
+      document.getElementById("refCode").value = code;
+      document.getElementById("copyBtn").addEventListener("click", () => {
+        navigator.clipboard.writeText(code).then(() => {
+          const b = document.getElementById("copyBtn");
+          b.textContent = "Copied!";
+          setTimeout(() => b.textContent = "Copy Code", 1800);
+        });
+      });
+    });
+  </script>
+</body>
+</html>
