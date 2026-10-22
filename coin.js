@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   cbRenderNav();
   bindBack();
   bindRanges();
+  bindFav();
   await loadCoin();
   document.getElementById("coinBuyBtn").href = `trade.html?coin=${coinId}&side=buy`;
   document.getElementById("coinSellBtn").href = `trade.html?coin=${coinId}&side=sell`;
@@ -37,6 +38,15 @@ function bindRanges() {
   });
 }
 
+function bindFav() {
+  const btn = document.getElementById("coinFavBtn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const isFav = cbToggleFavorite(coinId);
+    btn.textContent = isFav ? "★ In Favorites" : "☆ Add to Favorites";
+  });
+}
+
 async function loadCoin() {
   try {
     const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(coinId)}&sparkline=true`;
@@ -47,14 +57,23 @@ async function loadCoin() {
     if (!arr.length) throw new Error("Coin not found");
     coinData = arr[0];
     sparklinePrices = coinData.sparkline_in_7d?.price || [];
+    cbPushRecent(coinData);
     renderHeader();
     renderPrice();
     renderStats();
+    updateFavBtn();
     await drawChart();
   } catch (err) {
     console.error(err);
     document.getElementById("coinHeader").innerHTML = `<div class="error-box">⚠️ ${err.message}</div>`;
   }
+}
+
+function updateFavBtn() {
+  const btn = document.getElementById("coinFavBtn");
+  if (!btn) return;
+  const isFav = cbGetFavorites().includes(coinId);
+  btn.textContent = isFav ? "★ In Favorites" : "☆ Add to Favorites";
 }
 
 function renderHeader() {
@@ -132,7 +151,6 @@ async function drawChart() {
   const noteEl = document.getElementById("chartNote");
   if (noteEl) noteEl.textContent = "";
 
-  // Show sparkline immediately for 1D / 1W (we already have it)
   if ((days === "1" || days === "7") && sparklinePrices.length > 1) {
     const prices = days === "1" ? sparklinePrices.slice(-24) : sparklinePrices;
     drawPrices(chart, prices);
@@ -145,9 +163,7 @@ async function drawChart() {
     const cacheKey = `cb_chart_${coinId}_${days}`;
     let data = null;
     const cached = localStorage.getItem(cacheKey);
-    if (cached) {
-      try { const p = JSON.parse(cached); if (Date.now() - p.ts < 6 * 3600000) data = p.data; } catch {}
-    }
+    if (cached) { try { const p = JSON.parse(cached); if (Date.now() - p.ts < 6 * 3600000) data = p.data; } catch {} }
     if (!data) {
       let res = await fetch(url);
       if (!res.ok) res = await fetch(PROXY + encodeURIComponent(url));
@@ -155,7 +171,6 @@ async function drawChart() {
       data = await res.json();
       try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data })); } catch {}
     }
-
     const prices = data.prices;
     if (!prices || prices.length < 2) throw new Error("Not enough data");
     drawPrices(chart, prices.map(p => p[1]));
