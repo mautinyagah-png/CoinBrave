@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Transactions — CoinBrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">
+      <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 1.8 3.6 5.5v6.2c0 5 3.5 9.1 8.4 10.5 4.9-1.4 8.4-5.5 8.4-10.5V5.5L12 1.8z" fill="#f0b90b"/>
+        <path d="M12 5.5 6.6 8v3.7c0 3.1 2.1 5.7 5.4 6.6 3.3-.9 5.4-3.5 5.4-6.6V8L12 5.5z" fill="#0b0e11"/>
+        <text x="12" y="15.3" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="6.2" font-weight="800" fill="#f0b90b">B</text>
+      </svg>
+      <span>CoinBrave</span>
+    </div>
+    <nav class="nav"></nav>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <div class="trade-header">
+        <h2>Transaction History</h2>
+        <div class="discovery-tabs" style="margin-bottom:0">
+          <button data-filter="all" class="active">All</button>
+          <button data-filter="buy">Buys</button>
+          <button data-filter="sell">Sells</button>
+          <button data-filter="deposit">Deposits</button>
+          <button data-filter="withdraw">Withdrawals</button>
+        </div>
+      </div>
+      <div id="txList" class="coin-list"><div class="loading">Loading…</div></div>
+    </section>
+  </main>
+
+  <script src="auth.js"></script>
+  <script src="transactions.js"></script>
+</body>
+</html>
