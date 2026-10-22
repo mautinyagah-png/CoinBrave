@@ -36,6 +36,11 @@
       </div>
     </section>
 
+    <div id="greetingWrap" style="display:none">
+      <div class="greeting" id="greeting">Hi 👋</div>
+      <div class="greeting-sub" id="greetingSub">Here's your portfolio today</div>
+    </div>
+
     <section class="balance-card" id="balanceCard" style="display:none">
       <div class="balance-header">
         <div style="flex:1">
@@ -48,9 +53,7 @@
           <div class="balance-pl" id="balancePL"></div>
         </div>
         <button class="balance-toggle" id="balanceToggle" aria-label="Hide chart">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
       </div>
       <div class="chart-wrap" id="chartWrap">
@@ -63,6 +66,11 @@
           <button data-range="365">1Y</button>
         </div>
       </div>
+    </section>
+
+    <section class="panel" id="recentPanel" style="display:none">
+      <h2>Recently Viewed</h2>
+      <div class="recent-row" id="recentRow"></div>
     </section>
 
     <section class="panel">
