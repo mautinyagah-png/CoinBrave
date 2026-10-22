@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terms — CoinBrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">
+      <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 1.8 3.6 5.5v6.2c0 5 3.5 9.1 8.4 10.5 4.9-1.4 8.4-5.5 8.4-10.5V5.5L12 1.8z" fill="#f0b90b"/>
+        <path d="M12 5.5 6.6 8v3.7c0 3.1 2.1 5.7 5.4 6.6 3.3-.9 5.4-3.5 5.4-6.6V8L12 5.5z" fill="#0b0e11"/>
+        <text x="12" y="15.3" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="6.2" font-weight="800" fill="#f0b90b">B</text>
+      </svg>
+      <span>CoinBrave</span>
+    </div>
+    <nav class="nav"></nav>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <h2>Terms of Use</h2>
+      <div style="font-size:0.92rem;line-height:1.75;color:var(--text-dim)">
+        <p style="margin-bottom:12px"><b>Last updated:</b> <span id="date"></span></p>
+        <p style="margin-bottom:12px"><b>1. Demo only.</b> CoinBrave is an educational demonstration. No real money, real crypto, or real transactions are involved. All balances are simulated.</p>
+        <p style="margin-bottom:12px"><b>2. No financial advice.</b> Prices, charts, and portfolio values are for informational purposes only. Nothing on this site constitutes investment advice.</p>
+        <p style="margin-bottom:12px"><b>3. As-is.</b> The service is provided "as is" without warranties of any kind. We are not liable for any loss arising from use of this site.</p>
+        <p style="margin-bottom:12px"><b>4. Your responsibility.</b> You are responsible for maintaining your own password and browser data. Clearing your browser's site data will erase your account and wallet — permanently and irreversibly.</p>
+        <p style="margin-bottom:12px"><b>5. Third-party data.</b> Live prices are provided by the public CoinGecko API. We do not guarantee accuracy or availability.</p>
+        <p style="margin-bottom:12px"><b>6. Changes.</b> We may update these terms at any time. Continued use after changes constitutes acceptance.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      cbRenderNav();
+      document.getElementById('date').textContent = new Date().toLocaleDateString();
+    });
+  </script>
+</body>
+</html>
