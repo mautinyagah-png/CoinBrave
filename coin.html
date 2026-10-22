@@ -20,17 +20,20 @@
   </header>
 
   <main class="container">
+    <a href="market.html" id="backBtn" class="btn-outline" style="display:inline-block;align-self:flex-start;text-decoration:none;padding:8px 14px;font-size:0.85rem">← Back</a>
+
     <section class="panel">
       <div id="coinHeader" class="coin-detail-header"><div class="loading">Loading coin…</div></div>
       <div class="coin-detail-price" id="coinPrice"></div>
       <div class="range-tabs" style="justify-content:flex-start;margin-bottom:12px">
-        <button data-days="1" class="active">1D</button>
-        <button data-days="7">1W</button>
+        <button data-days="1">1D</button>
+        <button data-days="7" class="active">1W</button>
         <button data-days="30">1M</button>
         <button data-days="365">1Y</button>
         <button data-days="max">ALL</button>
       </div>
       <svg class="coin-chart-svg" id="coinChart" viewBox="0 0 400 180" preserveAspectRatio="none"></svg>
+      <div id="chartNote" class="muted" style="font-size:0.8rem;margin-top:8px"></div>
       <div class="coin-stats" id="coinStats"></div>
     </section>
 
