@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
   <header class="topbar">
     <div class="logo">
       <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
@@ -17,30 +16,22 @@
       </svg>
       <span>CoinBrave</span>
     </div>
-    <nav class="nav">
-      <a class="active" href="#">Markets</a>
-      <a href="#">Trade</a>
-      <a href="#">Wallet</a>
-      <a href="#" class="btn-signup">Sign Up</a>
-    </nav>
+    <nav class="nav"></nav>
   </header>
 
   <main class="container">
     <section class="panel">
       <h2>Top 5 Coins</h2>
-      <div id="top5" class="coin-list">
-        <div class="loading">Loading prices…</div>
-      </div>
+      <div id="top5" class="coin-list"><div class="loading">Loading prices…</div></div>
     </section>
 
     <section class="panel">
       <h2>Trade — All Other Coins</h2>
-      <div id="others" class="coin-list">
-        <div class="loading">Loading prices…</div>
-      </div>
+      <div id="others" class="coin-list"><div class="loading">Loading prices…</div></div>
     </section>
   </main>
 
+  <script src="auth.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
