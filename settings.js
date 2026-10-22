@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadCoinsForAlerts();
   renderAlerts();
   bindAlerts();
+  bindResetWallet();
   bindDeleteAccount();
 });
 
@@ -148,6 +149,15 @@ function renderAlerts() {
     </div>`).join("");
   list.querySelectorAll(".remove-btn").forEach(btn => {
     btn.addEventListener("click", () => { cbRemoveAlert(user.email, btn.dataset.id); renderAlerts(); });
+  });
+}
+
+function bindResetWallet() {
+  document.getElementById("resetWalletBtn").addEventListener("click", () => {
+    if (cbResetWallet(user.email)) {
+      showToast("Wallet reset to $5,000 + starter coins");
+      setTimeout(() => location.href = "wallet.html", 900);
+    }
   });
 }
 
