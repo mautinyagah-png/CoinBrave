@@ -117,18 +117,18 @@ function cbRecordFailedAttempt(email) {
 function cbResetLoginAttempts(email) {
   const attempts = cbGetLoginAttempts();
   delete attempts[email];
+  delete attempts[email + "_until"];
   localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts));
 }
 function cbIsLockedOut(email) {
   const attempts = cbGetLoginAttempts();
   const count = attempts[email] || 0;
   if (count >= 3) {
-    const attemptsFull = cbGetLoginAttempts();
-    if (!attemptsFull[email + "_until"] || Date.now() > attemptsFull[email + "_until"]) {
-      attemptsFull[email + "_until"] = Date.now() + 30 * 1000;
-      localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attemptsFull));
+    if (!attempts[email + "_until"] || Date.now() > attempts[email + "_until"]) {
+      attempts[email + "_until"] = Date.now() + 30 * 1000;
+      localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts));
     }
-    const remaining = Math.ceil((attemptsFull[email + "_until"] - Date.now()) / 1000);
+    const remaining = Math.ceil((attempts[email + "_until"] - Date.now()) / 1000);
     if (remaining > 0) return remaining;
     else { cbResetLoginAttempts(email); return 0; }
   }
@@ -145,15 +145,14 @@ function cbToggleFavorite(id) {
   return f.includes(id);
 }
 
-// ---- Recently viewed ----
 function cbGetRecent() { try { return JSON.parse(localStorage.getItem(CB_RECENT_KEY) || "[]"); } catch { return []; } }
+function cbSaveRecent(l) { localStorage.setItem(CB_RECENT_KEY, JSON.stringify(l)); }
 function cbPushRecent(coin) {
   if (!coin || !coin.id) return;
   const list = cbGetRecent().filter(c => c.id !== coin.id);
   list.unshift({ id: coin.id, name: coin.name, symbol: coin.symbol, image: coin.image, price: coin.current_price, change: coin.price_change_percentage_24h });
   cbSaveRecent(list.slice(0, 5));
 }
-function cbSaveRecent(l) { localStorage.setItem(CB_RECENT_KEY, JSON.stringify(l)); }
 
 function cbFormatPrice(p) {
   if (p == null || isNaN(p)) return "—";
@@ -305,6 +304,49 @@ function cbDeleteAccount(email) {
   return true;
 }
 
+// ---- Reset demo wallet ----
+function cbResetWallet(email) {
+  if (!confirm("Reset your demo wallet?\n\nYour cash returns to $5,000 and your starter coins are restored. All transactions and averages are cleared. Your account and alerts stay.")) return false;
+  cbSaveWallet(email, cbDefaultWallet());
+  cbSaveAvgPrices(email, cbDefaultAvgPrices());
+  localStorage.removeItem(CB_TX_PREFIX + email);
+  localStorage.removeItem(CB_HISTORY_PREFIX + email);
+  cbAddTransaction(email, { type: "deposit", total: 5000, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
+  cbAddNotification(email, { type: "deposit", title: "Wallet reset", body: "Demo wallet restored to $5,000 + starter coins." });
+  return true;
+}
+
+// ---- Referral helpers ----
+function cbValidateReferralCode(code) {
+  if (!code) return null;
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return null;
+  // codes are REF-XXXXXX where XXXXXX came from a userId CB-XXXXXX
+  const users = cbGetUsers();
+  const referrer = users.find(u => {
+    const refCode = (u.userId || "").replace(/^CB-/, "REF-");
+    return refCode === normalized;
+  });
+  return referrer || null;
+}
+
+function cbApplyReferral(newUserEmail, referrerEmail) {
+  if (!newUserEmail || !referrerEmail || newUserEmail === referrerEmail) return;
+  const bonus = 5;
+  // New user gets bonus
+  const newWallet = cbGetWallet(newUserEmail) || cbDefaultWallet();
+  newWallet.usd = +((newWallet.usd || 0) + bonus).toFixed(2);
+  cbSaveWallet(newUserEmail, newWallet);
+  cbAddTransaction(newUserEmail, { type: "deposit", total: bonus, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
+  cbAddNotification(newUserEmail, { type: "reward", title: `Welcome bonus +$${bonus}`, body: "Referral bonus applied." });
+  // Referrer gets bonus
+  const refWallet = cbGetWallet(referrerEmail) || cbDefaultWallet();
+  refWallet.usd = +((refWallet.usd || 0) + bonus).toFixed(2);
+  cbSaveWallet(referrerEmail, refWallet);
+  cbAddTransaction(referrerEmail, { type: "deposit", total: bonus, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
+  cbAddNotification(referrerEmail, { type: "reward", title: `Referral bonus +$${bonus}`, body: "Someone signed up with your code." });
+}
+
 function cbRenderFooter() {
   if (document.querySelector(".cb-footer")) return;
   const f = document.createElement("footer");
@@ -357,10 +399,8 @@ async function cbGetMarketForFunds() {
 async function cbOpenFundsModal(mode, onSuccess) {
   const user = cbCurrentUser();
   if (!user) { location.href = "signup.html"; return; }
-
   let existing = document.getElementById("cbFundsModal");
   if (existing) existing.remove();
-
   const modal = document.createElement("div");
   modal.id = "cbFundsModal";
   modal.className = "modal-overlay hidden";
