@@ -29,7 +29,6 @@
     </section>
   </main>
 
-  <!-- Trade modal -->
   <div id="tradeModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -45,6 +44,12 @@
           </div>
         </div>
 
+        <div class="preset-row" id="presetRow">
+          <button data-pct="25">25%</button>
+          <button data-pct="50">50%</button>
+          <button data-pct="100">100%</button>
+        </div>
+
         <div class="form-group">
           <label>Amount (<span id="modalSymbol"></span>)</label>
           <input id="modalAmount" type="number" step="any" min="0" placeholder="0.00" />
@@ -53,9 +58,7 @@
           <label>Total (USD)</label>
           <input id="modalTotal" type="text" readonly value="$0.00" />
         </div>
-        <div class="muted" style="font-size:0.85rem;margin-bottom:8px">
-          Fee (0.1%): $<span id="modalFee">0.00</span>
-        </div>
+        <div class="muted" style="font-size:0.85rem;margin-bottom:8px">Fee (0.1%): $<span id="modalFee">0.00</span></div>
         <div id="modalError" class="form-error"></div>
       </div>
       <div class="modal-footer">
