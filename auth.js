@@ -126,6 +126,23 @@ function cbFormatSigned(n, decimals) {
   return sign + "$" + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
 }
 
+// ---- Sparkline (needed by app.js and market.js) ----
+function cbSparkline(prices, width, height, up) {
+  width = width || 60; height = height || 24;
+  if (!prices || prices.length < 2) return "";
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 1;
+  const step = width / (prices.length - 1);
+  const pts = prices.map((p, i) => {
+    const x = i * step;
+    const y = height - ((p - min) / range) * (height - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const color = up ? "var(--up)" : "var(--down)";
+  return `<svg class="sparkline" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
 function cbGetTransactions(email) { try { return JSON.parse(localStorage.getItem(CB_TX_PREFIX + email) || "[]"); } catch { return []; } }
 function cbSaveTransactions(email, l) { localStorage.setItem(CB_TX_PREFIX + email, JSON.stringify(l)); }
 function cbAddTransaction(email, tx) {
@@ -216,12 +233,10 @@ function cbRenderAvatarHTML(user, size) {
   return `<span class="avatar-emoji" style="font-size:${Math.round(s * 0.7)}px">${user.avatarEmoji || "🦁"}</span>`;
 }
 
-// ---- Logout with confirm ----
 function cbLogout() {
   if (confirm("Log out of CoinBrave?")) { cbClearSession(); location.href = "index.html"; }
 }
 
-// ---- Delete account ----
 function cbDeleteAccount(email) {
   if (!confirm("Delete your account PERMANENTLY?\n\nAll your wallet, trades, alerts, and settings will be erased forever. This cannot be undone.")) return false;
   const typed = prompt('Type DELETE (all caps) to confirm:');
@@ -239,7 +254,6 @@ function cbDeleteAccount(email) {
   return true;
 }
 
-// ---- Footer auto-inject ----
 function cbRenderFooter() {
   if (document.querySelector(".cb-footer")) return;
   const f = document.createElement("footer");
@@ -277,7 +291,6 @@ function cbEnablePullToRefresh(onRefresh) {
   document.addEventListener("touchend", () => { if (pulling) { pulling = false; if (indicator) { indicator.style.opacity = ""; indicator.style.transform = ""; } } }, { passive: true });
 }
 
-// ---- Funds (Deposit/Withdraw) modal ----
 let _cbMarketCache = null, _cbMarketTime = 0;
 async function cbGetMarketForFunds() {
   if (_cbMarketCache && Date.now() - _cbMarketTime < 5 * 60 * 1000) return _cbMarketCache;
@@ -350,11 +363,8 @@ async function cbOpenFundsModal(mode, onSuccess) {
 
     if (asset === "usd") {
       const avail = wallet.usd || 0;
-      if (mode === "withdraw") {
-        infoEl.innerHTML = `Available: <b>$${avail.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`;
-      } else {
-        infoEl.innerHTML = `Current cash: <b>$${avail.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`;
-      }
+      if (mode === "withdraw") infoEl.innerHTML = `Available: <b>$${avail.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`;
+      else infoEl.innerHTML = `Current cash: <b>$${avail.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>`;
     } else {
       const coin = market.find(c => c.id === asset);
       if (!coin) { infoEl.textContent = ""; return; }
