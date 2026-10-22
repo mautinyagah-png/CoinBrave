@@ -2,6 +2,7 @@ const API   = "https://api.coingecko.com/api/v3/coins/markets";
 const QUERY = "?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false";
 const URL   = API + QUERY;
 const PROXY = "https://api.allorigins.win/raw?url=";
+const DONUT_COLORS = ["#f0b90b","#0ecb81","#f6465d","#3f88f0","#a855f7","#ff7a00","#00b8d4","#e91e63"];
 
 document.addEventListener("DOMContentLoaded", async () => {
   cbRenderNav();
@@ -29,6 +30,38 @@ function renderSkeletons() {
   document.getElementById("holdings").innerHTML = Array(4).fill(
     `<div class="holding-row skeleton-row">${s('28px','28px','border-radius:50%')}<div>${s('100px','12px')}<div style="margin-top:6px">${s('60px','10px')}</div></div><div>${s('80px','12px','margin-left:auto')}</div><div>${s('60px','12px','margin-left:auto')}</div></div>`
   ).join("");
+}
+
+function renderDonut(rows, cash) {
+  const panel = document.getElementById("donutPanel");
+  const svg = document.getElementById("donutSvg");
+  const legend = document.getElementById("donutLegend");
+  const total = rows.reduce((a, r) => a + r.usd, 0) + cash;
+  if (rows.length === 0 || total <= 0) { panel.style.display = "none"; return; }
+  panel.style.display = "";
+
+  const segments = [];
+  if (cash > 0) segments.push({ label: "Cash (USD)", usd: cash, color: "#848e9c" });
+  rows.forEach((r, i) => segments.push({ label: r.coin.symbol.toUpperCase(), usd: r.usd, color: DONUT_COLORS[i % DONUT_COLORS.length] }));
+
+  let cumulative = 0;
+  const R = 40, C = 50, STROKE = 14;
+  const circumference = 2 * Math.PI * R;
+  svg.innerHTML = segments.map(s => {
+    const pct = s.usd / total;
+    const dash = pct * circumference;
+    const gap = circumference - dash;
+    const offset = -cumulative * circumference;
+    cumulative += pct;
+    return `<circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="${s.color}" stroke-width="${STROKE}" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${offset}" transform="rotate(-90 ${C} ${C})"/>`;
+  }).join("");
+
+  legend.innerHTML = segments.map(s => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${s.color}"></div>
+      <div class="legend-label">${s.label}</div>
+      <div class="legend-pct">${((s.usd / total) * 100).toFixed(1)}%</div>
+    </div>`).join("");
 }
 
 async function initWallet() {
@@ -91,6 +124,8 @@ async function initWallet() {
     plEl.textContent = "—";
     plPctEl.textContent = "No cost basis yet";
   }
+
+  renderDonut(rows, cash);
 
   const list = document.getElementById("holdings");
   if (rows.length === 0) {
