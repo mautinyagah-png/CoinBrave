@@ -6,28 +6,18 @@ const PROXY = "https://api.allorigins.win/raw?url=";
 async function loadCoins() {
   try {
     let res = await fetch(URL);
-
-    // If CoinGecko rate-limits (429) or blocks us, retry via CORS proxy
     if (!res.ok) {
       console.warn("Direct fetch failed:", res.status, "→ trying proxy…");
       res = await fetch(PROXY + encodeURIComponent(URL));
     }
     if (!res.ok) throw new Error(`API error ${res.status}`);
-
     const coins = await res.json();
-    if (!Array.isArray(coins) || coins.length === 0) {
-      throw new Error("Empty response from API");
-    }
-
+    if (!Array.isArray(coins) || coins.length === 0) throw new Error("Empty response");
     render("top5",   coins.slice(0, 5));
     render("others", coins.slice(5));
   } catch (err) {
-    console.error("loadCoins failed:", err);
-    const msg = `
-      <div class="error-box">
-        ⚠️ Could not load prices: <b>${err.message}</b><br>
-        Open DevTools (F12) → Console for details.
-      </div>`;
+    console.error(err);
+    const msg = `<div class="error-box">⚠️ Could not load prices: <b>${err.message}</b></div>`;
     document.getElementById("top5").innerHTML   = msg;
     document.getElementById("others").innerHTML = "";
   }
@@ -56,5 +46,8 @@ function render(id, list) {
   }).join("");
 }
 
-loadCoins();
-setInterval(loadCoins, 60000);
+document.addEventListener("DOMContentLoaded", () => {
+  cbRenderNav();
+  loadCoins();
+  setInterval(loadCoins, 60000);
+});
