@@ -20,7 +20,6 @@
   </header>
 
   <main class="container">
-    <!-- Landing hero (shown only when logged out) -->
     <section class="landing-hero" id="landingHero" style="display:none">
       <div class="hero-inner">
         <h1>Trade crypto.<br><span class="gold">Simply.</span></h1>
@@ -30,20 +29,23 @@
           <a href="market.html" class="btn-outline">Browse Markets</a>
         </div>
         <div class="hero-trust">
-          <span>✓ $10,000 demo balance</span>
+          <span>✓ $5,000 demo balance</span>
           <span>✓ Real-time prices</span>
           <span>✓ No credit card</span>
         </div>
       </div>
     </section>
 
-    <!-- Balance card (shown only when logged in) -->
     <section class="balance-card" id="balanceCard" style="display:none">
       <div class="balance-header">
-        <div>
+        <div style="flex:1">
           <div class="balance-label">Portfolio Balance <span class="demo-badge">DEMO</span></div>
-          <div class="balance-value" id="balanceValue">—</div>
+          <div class="balance-value-row">
+            <div class="balance-value" id="balanceValue">—</div>
+            <button class="btn-addfunds" id="addFundsBtn">+ Add Funds</button>
+          </div>
           <div class="balance-change" id="balanceChange">—</div>
+          <div class="balance-pl" id="balancePL"></div>
         </div>
         <button class="balance-toggle" id="balanceToggle" aria-label="Hide chart">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -52,7 +54,8 @@
         </button>
       </div>
       <div class="chart-wrap" id="chartWrap">
-        <svg class="balance-chart" id="balanceChart" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
+        <svg class="balance-chart" id="balanceChart" viewBox="0 0 400 140" preserveAspectRatio="none"></svg>
+        <div class="chart-tooltip" id="chartTooltip"></div>
         <div class="range-tabs">
           <button data-range="1">1D</button>
           <button data-range="7" class="active">1W</button>
