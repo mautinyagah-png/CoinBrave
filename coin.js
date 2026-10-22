@@ -4,15 +4,27 @@ if (!coinId) location.href = "market.html";
 
 const PROXY = "https://api.allorigins.win/raw?url=";
 let coinData = null;
-let days = 1;
+let days = "7";
+let sparklinePrices = [];
 
 document.addEventListener("DOMContentLoaded", async () => {
   cbRenderNav();
+  bindBack();
   bindRanges();
   await loadCoin();
   document.getElementById("coinBuyBtn").href = `trade.html?coin=${coinId}&side=buy`;
   document.getElementById("coinSellBtn").href = `trade.html?coin=${coinId}&side=sell`;
 });
+
+function bindBack() {
+  const btn = document.getElementById("backBtn");
+  if (!btn) return;
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (document.referrer && document.referrer.includes(location.host)) history.back();
+    else location.href = "market.html";
+  });
+}
 
 function bindRanges() {
   document.querySelectorAll(".range-tabs button").forEach(btn => {
@@ -27,13 +39,14 @@ function bindRanges() {
 
 async function loadCoin() {
   try {
-    const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(coinId)}&sparkline=false`;
+    const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(coinId)}&sparkline=true`;
     let res = await fetch(url);
     if (!res.ok) res = await fetch(PROXY + encodeURIComponent(url));
     if (!res.ok) throw new Error(`API error ${res.status}`);
     const arr = await res.json();
     if (!arr.length) throw new Error("Coin not found");
     coinData = arr[0];
+    sparklinePrices = coinData.sparkline_in_7d?.price || [];
     renderHeader();
     renderPrice();
     renderStats();
@@ -86,9 +99,46 @@ function renderStats() {
     <div class="coin-stat"><div class="label">${l}</div><div class="value">${v}</div></div>`).join("");
 }
 
+function drawPrices(chart, values) {
+  if (!values || values.length < 2) {
+    chart.innerHTML = `<text x="200" y="90" text-anchor="middle" fill="var(--text-muted)" font-size="12">Not enough data</text>`;
+    return;
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const W = 400, H = 180, PAD = 10;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - PAD * 2) - PAD;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const up = values[values.length - 1] >= values[0];
+  const color = up ? "#0ecb81" : "#f6465d";
+  chart.innerHTML = `
+    <defs>
+      <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="0,${H} ${pts} ${W},${H}" fill="url(#grad)"/>
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  `;
+}
+
 async function drawChart() {
   const chart = document.getElementById("coinChart");
-  chart.innerHTML = `<text x="200" y="90" text-anchor="middle" fill="#848e9c" font-size="12">Loading chart…</text>`;
+  const noteEl = document.getElementById("chartNote");
+  if (noteEl) noteEl.textContent = "";
+
+  // Show sparkline immediately for 1D / 1W (we already have it)
+  if ((days === "1" || days === "7") && sparklinePrices.length > 1) {
+    const prices = days === "1" ? sparklinePrices.slice(-24) : sparklinePrices;
+    drawPrices(chart, prices);
+  } else {
+    chart.innerHTML = `<text x="200" y="90" text-anchor="middle" fill="var(--text-muted)" font-size="12">Loading chart…</text>`;
+  }
 
   try {
     const url = `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coinId)}/market_chart?vs_currency=usd&days=${days}`;
@@ -96,7 +146,7 @@ async function drawChart() {
     let data = null;
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
-      try { const p = JSON.parse(cached); if (Date.now() - p.ts < 3600000) data = p.data; } catch {}
+      try { const p = JSON.parse(cached); if (Date.now() - p.ts < 6 * 3600000) data = p.data; } catch {}
     }
     if (!data) {
       let res = await fetch(url);
@@ -108,31 +158,17 @@ async function drawChart() {
 
     const prices = data.prices;
     if (!prices || prices.length < 2) throw new Error("Not enough data");
-
-    const min = Math.min(...prices.map(p => p[1]));
-    const max = Math.max(...prices.map(p => p[1]));
-    const range = max - min || 1;
-    const W = 400, H = 180, PAD = 10;
-
-    const scaled = prices.map((p, i) => {
-      const x = (i / (prices.length - 1)) * W;
-      const y = H - ((p[1] - min) / range) * (H - PAD * 2) - PAD;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-
-    const up = prices[prices.length - 1][1] >= prices[0][1];
-    const color = up ? "#0ecb81" : "#f6465d";
-
-    chart.innerHTML = `
-      <defs>
-        <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <polygon points="0,${H} ${scaled} ${W},${H}" fill="url(#grad)"/>
-      <polyline points="${scaled}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-    `;
+    drawPrices(chart, prices.map(p => p[1]));
+    if (noteEl) noteEl.textContent = "";
   } catch (err) {
-    console.error(err);
-    chart.innerHTML = `<text x="200" y="90" text-an
+    console.warn("Detailed chart unavailable:", err.message);
+    if ((days === "1" || days === "7") && sparklinePrices.length > 1) {
+      const prices = days === "1" ? sparklinePrices.slice(-24) : sparklinePrices;
+      drawPrices(chart, prices);
+      if (noteEl) noteEl.textContent = "Showing 7-day trend — detailed chart rate-limited, try again in a minute.";
+    } else {
+      chart.innerHTML = `<text x="200" y="90" text-anchor="middle" fill="var(--text-muted)" font-size="12">Detailed chart unavailable</text><text x="200" y="108" text-anchor="middle" fill="var(--text-muted)" font-size="10">Try again in a moment</text>`;
+      if (noteEl) noteEl.textContent = "CoinGecko rate limit hit — try switching ranges or reload after 30s.";
+    }
+  }
+}
