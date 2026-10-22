@@ -1,0 +1,19 @@
+{
+  "name": "CoinBrave",
+  "short_name": "CoinBrave",
+  "description": "Track, trade, and manage your crypto portfolio.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0e11",
+  "theme_color": "#f0b90b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
