@@ -1,42 +1,50 @@
 # CoinBrave
 
-A cryptocurrency exchange and trading platform where users can create accounts,
-manage a wallet, and track live coin prices — with the top 5 coins featured on
-the homepage and the full market available in the Trade section.
+A polished cryptocurrency trading platform demo — live prices, portfolio tracking, and full trading flow with accounts, wallets, alerts, notifications, rewards, and referral system.
 
 ## ✨ Features
 
-- 🔐 User account creation and login
-- 👛 Personal wallet view
-- 🏠 Homepage featuring the top 5 coins by market cap
-- 📈 Trade section listing all other coins
-- 💹 Real-time prices and 24h change (via CoinGecko API)
-- 🌙 Dark-mode trading dashboard UI
+### Core
+- 🏠 **Home** — portfolio balance card with 24h change and hideable chart (1D/1W/1M/1Y)
+- 📊 **Market** — 250+ coins with live prices, sparklines, and sort (Market Cap/Gainers/Losers/Volume)
+- 📈 **Coin Detail** — full-page chart (1D/1W/1M/1Y/ALL), stats, and direct Buy/Sell
+- 💸 **Trade** — search, live prices, buy/sell with 0.1% fee
+- 💰 **Assets** — live portfolio value, 24h change, holdings breakdown
+
+### Accounts & Profile
+- 🔐 Sign up / log in with SHA-256 hashed password
+- 👤 Profile drawer (tap the CoinBrave logo when logged in)
+- 🧑 Custom display name + auto-generated User ID (`CB-XXXXXX`)
+- 🎨 Avatar picker — 20 emoji options + custom image upload (max 200KB)
+- 🌙 Dark / Light theme toggle
+
+### Extras
+- 📜 **Transaction History** — filterable log of buys, sells, deposits, withdrawals
+- 🔔 **Notifications** — trade confirmations, alerts, deposits
+- 🎯 **Price Alerts** — set above/below targets on any coin; fires when hit
+- 🎁 **Rewards Hub** — claim $5 daily (streak tracking)
+- 🤝 **Referral** — personal `REF-XXXXXX` code
+- 💵 **Deposit / Withdraw** — demo USD in/out
+
+### Polish
+- 📱 Mobile-first with bottom navigation (Home/Market/Trade/Assets)
+- 🧠 **AI helper** — floating draggable brain icon on every page
+- ⚡ **Skeletons** during loading (no more "Loading…" flash)
+- 📉 **Sparklines** on Home and Market coin rows (7-day trend)
+- 🔄 **Pull-to-refresh** on Home, Market, and Assets
+- 🎨 **PWA-ready** — installable on mobile ("Add to Home Screen") with branded icon
+- 🛡️ **404 page** redirects to home
+- 📄 Privacy + Terms pages
 
 ## 🛠 Tech Stack
 
-| Layer     | Tech                          |
-|-----------|-------------------------------|
-| Frontend  | _(HTML/CSS/JS or React — TBD)_ |
-| Backend   | _(Node.js/Express — planned)_  |
-| Database  | _(PostgreSQL — planned)_       |
-| Auth      | _(JWT — planned)_              |
-| Price API | CoinGecko Public API           |
+| Layer | Tech |
+|-------|------|
+| Frontend | Vanilla HTML/CSS/JS |
+| Storage | `localStorage` (per-browser) |
+| Auth | SHA-256 hash (client-side demo) |
+| Price data | CoinGecko Public API |
+| Charts | Custom SVG (no dependencies) |
+| Hosting | GitHub Pages |
 
-## 🚦 Roadmap
-
-- [x] Create repository
-- [ ] Live market data (top 5 + trade list)
-- [ ] Sign-up / login UI (localStorage prototype)
-- [ ] Wallet page
-- [ ] Real auth + database
-- [ ] Order/trade flow
-
-## 🔌 Price Data
-
-Live prices come from the [CoinGecko API](https://www.coingecko.com/en/api):
-
-```js
-GET https://api.coingecko.com/api/v3/coins/markets
-  ?vs_currency=usd&order=market_cap_desc&per_page=100&page=1# CoinBrave
-A full-stack cryptocurrency exchange platform with user authentication, personal wallets, real-time price tracking via CoinGecko, a homepage featuring the top 5 coins, and a dedicated trading section for all other assets.
+## 🔌 Live Price Data
