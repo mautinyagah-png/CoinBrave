@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coin — CoinBrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">
+      <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 1.8 3.6 5.5v6.2c0 5 3.5 9.1 8.4 10.5 4.9-1.4 8.4-5.5 8.4-10.5V5.5L12 1.8z" fill="#f0b90b"/>
+        <path d="M12 5.5 6.6 8v3.7c0 3.1 2.1 5.7 5.4 6.6 3.3-.9 5.4-3.5 5.4-6.6V8L12 5.5z" fill="#0b0e11"/>
+        <text x="12" y="15.3" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="6.2" font-weight="800" fill="#f0b90b">B</text>
+      </svg>
+      <span>CoinBrave</span>
+    </div>
+    <nav class="nav"></nav>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <div id="coinHeader" class="coin-detail-header"><div class="loading">Loading coin…</div></div>
+      <div class="coin-detail-price" id="coinPrice"></div>
+      <div class="range-tabs" style="justify-content:flex-start;margin-bottom:12px">
+        <button data-days="1" class="active">1D</button>
+        <button data-days="7">1W</button>
+        <button data-days="30">1M</button>
+        <button data-days="365">1Y</button>
+        <button data-days="max">ALL</button>
+      </div>
+      <svg class="coin-chart-svg" id="coinChart" viewBox="0 0 400 180" preserveAspectRatio="none"></svg>
+      <div class="coin-stats" id="coinStats"></div>
+    </section>
+
+    <section class="panel">
+      <div class="btn-row">
+        <a href="#" id="coinBuyBtn" class="btn-buy" style="text-align:center;padding:14px;display:block;font-size:1rem;text-decoration:none">Buy</a>
+        <a href="#" id="coinSellBtn" class="btn-sell" style="text-align:center;padding:14px;display:block;font-size:1rem;text-decoration:none">Sell</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="auth.js"></script>
+  <script src="coin.js"></script>
+</body>
+</html>
