@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign Up — CoinBrave</title>
+  <title>Settings — CoinBrave</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -19,38 +19,79 @@
     <nav class="nav"></nav>
   </header>
 
-  <main class="auth-wrap">
-    <div class="auth-card">
-      <h1>Create your CoinBrave account</h1>
-      <p class="sub">Start with $10,000 demo funds + a starter portfolio.</p>
+  <main class="container">
+    <section class="panel">
+      <h2>Profile</h2>
+      <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap">
+        <div style="position:relative">
+          <div class="avatar-preview" id="avatarPreview"></div>
+        </div>
+        <div style="flex:1;min-width:220px">
+          <div class="form-group">
+            <label>Display name</label>
+            <input id="nameInput" type="text" />
+          </div>
+          <div class="form-group">
+            <label>User ID (read-only)</label>
+            <input id="userIdInput" type="text" readonly />
+          </div>
+        </div>
+      </div>
 
-      <div id="err" class="form-error"></div>
+      <div class="avatar-edit-area" id="avatarEditArea">
+        <div class="form-group">
+          <label>Choose an emoji</label>
+          <div class="emoji-grid" id="emojiGrid"></div>
+        </div>
+        <div class="form-group">
+          <label>Or upload a picture (max 200KB)</label>
+          <input id="avatarUpload" type="file" accept="image/*" />
+          <button id="clearImageBtn" class="btn-outline" style="margin-top:8px;display:none">Use emoji instead</button>
+        </div>
+      </div>
 
-      <form id="signupForm" novalidate>
-        <div class="form-group">
-          <label for="name">Full name</label>
-          <input id="name" type="text" required placeholder="Satoshi Nakamoto" autocomplete="name" />
-        </div>
-        <div class="form-group">
-          <label for="email">Email</label>
-          <input id="email" type="email" required placeholder="you@example.com" autocomplete="email" />
-        </div>
-        <div class="form-group">
-          <label for="password">Password (min 8 chars)</label>
-          <input id="password" type="password" required minlength="8" placeholder="••••••••" autocomplete="new-password" />
-        </div>
-        <div class="form-group">
-          <label for="confirm">Confirm password</label>
-          <input id="confirm" type="password" required placeholder="••••••••" autocomplete="new-password" />
-        </div>
-        <button id="submitBtn" class="btn-primary" type="submit">Create Account</button>
-      </form>
+      <button id="saveProfileBtn" class="btn-primary" style="margin-top:16px">Save Profile</button>
+    </section>
 
-      <p class="auth-switch">Already have an account? <a href="login.html">Log in</a></p>
-    </div>
+    <section class="panel">
+      <h2>Appearance</h2>
+      <div class="btn-row">
+        <button id="themeDarkBtn" class="btn-outline">🌙 Dark</button>
+        <button id="themeLightBtn" class="btn-outline">☀️ Light</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Price Alerts</h2>
+      <div class="form-group">
+        <label>Coin</label>
+        <select id="alertCoin"></select>
+      </div>
+      <div class="btn-row" style="margin-bottom:16px">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Direction</label>
+          <select id="alertDirection">
+            <option value="above">Goes above</option>
+            <option value="below">Goes below</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Target (USD)</label>
+          <input id="alertPrice" type="number" min="0" step="0.01" placeholder="85000" />
+        </div>
+      </div>
+      <button id="addAlertBtn" class="btn-primary">Add Alert</button>
+      <div id="alertList" style="margin-top:16px"></div>
+    </section>
+
+    <section class="panel" style="border-color: var(--down); background: rgba(246,70,93,0.05)">
+      <h2 style="color: var(--down)">Danger Zone</h2>
+      <p class="muted" style="margin-bottom:16px;font-size:0.88rem">Deleting your account will erase everything permanently. This cannot be undone.</p>
+      <button id="deleteAccountBtn" class="btn-danger">Delete My Account</button>
+    </section>
   </main>
 
   <script src="auth.js"></script>
-  <script src="signup.js"></script>
+  <script src="settings.js"></script>
 </body>
 </html>
