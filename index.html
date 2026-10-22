@@ -20,10 +20,28 @@
   </header>
 
   <main class="container">
-    <section class="balance-card">
+    <!-- Landing hero (shown only when logged out) -->
+    <section class="landing-hero" id="landingHero" style="display:none">
+      <div class="hero-inner">
+        <h1>Trade crypto.<br><span class="gold">Simply.</span></h1>
+        <p>Track live prices, manage your portfolio, and trade 250+ coins — all in one place.</p>
+        <div class="hero-cta">
+          <a href="signup.html" class="btn-primary">Get Started Free</a>
+          <a href="market.html" class="btn-outline">Browse Markets</a>
+        </div>
+        <div class="hero-trust">
+          <span>✓ $10,000 demo balance</span>
+          <span>✓ Real-time prices</span>
+          <span>✓ No credit card</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Balance card (shown only when logged in) -->
+    <section class="balance-card" id="balanceCard" style="display:none">
       <div class="balance-header">
         <div>
-          <div class="balance-label">Portfolio Balance</div>
+          <div class="balance-label">Portfolio Balance <span class="demo-badge">DEMO</span></div>
           <div class="balance-value" id="balanceValue">—</div>
           <div class="balance-change" id="balanceChange">—</div>
         </div>
@@ -50,7 +68,7 @@
         <button data-tab="gainers">Top Gainers</button>
         <button data-tab="losers">Top Losers</button>
       </div>
-      <div id="discoveryList" class="coin-list"><div class="loading">Loading…</div></div>
+      <div id="discoveryList" class="coin-list"></div>
     </section>
 
     <section class="panel">
@@ -58,7 +76,7 @@
         <h2>Top 5 Coins</h2>
         <a href="market.html" class="btn-viewall">More →</a>
       </div>
-      <div id="top5" class="coin-list"><div class="loading">Loading prices…</div></div>
+      <div id="top5" class="coin-list"></div>
     </section>
   </main>
 
