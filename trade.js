@@ -3,6 +3,7 @@ const QUERY_TRADE = "?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&
 const URL_TRADE = API_TRADE + QUERY_TRADE;
 const PROXY_TRADE = "https://api.allorigins.win/raw?url=";
 const FEE_RATE = 0.001;
+const LARGE_TRADE_THRESHOLD = 1000;
 
 let allCoins = [];
 let currentTrade = null;
@@ -14,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   currentUser = cbCurrentUser();
   bindModal();
   bindSearch();
+  bindPresets();
   await loadAllCoins();
   cbCheckAlerts(allCoins);
 });
@@ -80,6 +82,14 @@ function renderTradeList(coins) {
     const coin = allCoins.find(x => x.id === btn.dataset.id);
     if (coin) openModal(coin, btn.dataset.side);
   }));
+  list.querySelectorAll(".trade-row[data-id] .info").forEach(info => {
+    info.addEventListener("click", () => {
+      const row = info.closest(".trade-row");
+      const coin = allCoins.find(c => c.id === row.dataset.id);
+      if (coin) cbPushRecent(coin);
+      location.href = `coin.html?coin=${row.dataset.id}`;
+    });
+  });
 }
 
 function bindSearch() {
@@ -88,6 +98,26 @@ function bindSearch() {
     const q = input.value.trim().toLowerCase();
     if (!q) return renderTradeList(allCoins);
     renderTradeList(allCoins.filter(c => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q)));
+  });
+}
+
+function bindPresets() {
+  document.querySelectorAll("#presetRow button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!currentTrade) return;
+      const pct = parseInt(btn.dataset.pct, 10) / 100;
+      const coin = currentTrade.coin;
+      const wallet = cbGetWallet(currentUser.email) || { usd: 0 };
+      let amount = 0;
+      if (currentTrade.side === "buy") {
+        const cashToSpend = wallet.usd * pct;
+        amount = cashToSpend / (coin.current_price * (1 + FEE_RATE));
+      } else {
+        amount = (wallet[coin.id] || 0) * pct;
+      }
+      document.getElementById("modalAmount").value = amount.toFixed(8);
+      recalcTotal();
+    });
   });
 }
 
@@ -147,13 +177,24 @@ function confirmTrade() {
 
   if (side === "buy") {
     if (totalWithFee > wallet.usd) return showError(`Insufficient USD. You have $${wallet.usd.toFixed(2)}, need $${totalWithFee.toFixed(2)}.`);
+  } else {
+    const holding = wallet[coin.id] || 0;
+    if (amount > holding + 1e-9) return showError(`Insufficient ${coin.symbol.toUpperCase()}. You have ${holding}.`);
+  }
+
+  // Large trade confirmation
+  if (total > LARGE_TRADE_THRESHOLD) {
+    const ok = confirm(`⚠️ Large trade\n\n${side === "buy" ? "Buy" : "Sell"} ${amount.toLocaleString()} ${coin.symbol.toUpperCase()}\nTotal: $${total.toFixed(2)}\n\nConfirm this trade?`);
+    if (!ok) return;
+  }
+
+  if (side === "buy") {
     wallet.usd = +(wallet.usd - totalWithFee).toFixed(2);
     wallet[coin.id] = +(((wallet[coin.id] || 0) + amount).toFixed(8));
     cbSaveWallet(currentUser.email, wallet);
     cbUpdateAvgOnBuy(currentUser.email, coin.id, amount, coin.current_price);
   } else {
     const holding = wallet[coin.id] || 0;
-    if (amount > holding + 1e-9) return showError(`Insufficient ${coin.symbol.toUpperCase()}. You have ${holding}.`);
     wallet[coin.id] = +((holding - amount).toFixed(8));
     if (wallet[coin.id] <= 0) delete wallet[coin.id];
     wallet.usd = +(wallet.usd + total - fee).toFixed(2);
