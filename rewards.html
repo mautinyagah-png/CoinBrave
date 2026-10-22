@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rewards — CoinBrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">
+      <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 1.8 3.6 5.5v6.2c0 5 3.5 9.1 8.4 10.5 4.9-1.4 8.4-5.5 8.4-10.5V5.5L12 1.8z" fill="#f0b90b"/>
+        <path d="M12 5.5 6.6 8v3.7c0 3.1 2.1 5.7 5.4 6.6 3.3-.9 5.4-3.5 5.4-6.6V8L12 5.5z" fill="#0b0e11"/>
+        <text x="12" y="15.3" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="6.2" font-weight="800" fill="#f0b90b">B</text>
+      </svg>
+      <span>CoinBrave</span>
+    </div>
+    <nav class="nav"></nav>
+  </header>
+
+  <main class="container">
+    <section class="panel" style="text-align:center">
+      <div style="font-size:3rem;margin-bottom:8px">🎁</div>
+      <h2>Rewards Hub</h2>
+      <p class="muted" style="margin-bottom:20px">Claim $5 free every day just for checking in.</p>
+      <div class="stat-card" style="max-width:300px;margin:0 auto 20px">
+        <div class="label">Streak</div>
+        <div class="value gold" id="streakValue">0 days</div>
+        <div class="sub" id="lastClaim">Never claimed</div>
+      </div>
+      <button id="claimBtn" class="btn-primary" style="max-width:300px;margin:0 auto">Claim $5</button>
+    </section>
+  </main>
+
+  <script src="auth.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      cbRenderNav();
+      if (!cbRequireAuth()) return;
+      const user = cbCurrentUser();
+      const KEY = "cb_rewards_" + user.email;
+      const state = JSON.parse(localStorage.getItem(KEY) || '{"streak":0,"lastClaim":null}');
+      const now = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const canClaim = !state.lastClaim || (now - state.lastClaim) >= dayMs;
+
+      document.getElementById("streakValue").textContent = state.streak + " days";
+      document.getElementById("lastClaim").textContent = state.lastClaim
+        ? "Last: " + new Date(state.lastClaim).toLocaleString()
+        : "Never claimed";
+
+      const btn = document.getElementById("claimBtn");
+      if (!canClaim) { btn.disabled = true; btn.textContent = "Come back tomorrow"; }
+
+      btn.addEventListener("click", () => {
+        const w = cbGetWallet(user.email) || { usd: 0 };
+        w.usd = +(w.usd + 5).toFixed(2);
+        cbSaveWallet(user.email, w);
+        state.streak = (now - (state.lastClaim || 0)) < 2 * dayMs ? state.streak + 1 : 1;
+        state.lastClaim = now;
+        localStorage.setItem(KEY, JSON.stringify(state));
+        cbAddTransaction(user.email, { type: "deposit", total: 5 });
+        cbAddNotification(user.email, { type: "reward", title: "Daily reward claimed 🎉", body: "Added $5 to your wallet." });
+        btn.disabled = true; btn.textContent = "Come back tomorrow";
+        document.getElementById("streakValue").textContent = state.streak + " days";
+        document.getElementById("lastClaim").textContent = "Last: " + new Date(now).toLocaleString();
+      });
+    });
+  </script>
+</body>
+</html>
