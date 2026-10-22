@@ -1,10 +1,10 @@
 let currentFilter = "all";
 let user = null;
 
-document.addEventListener("DOMContentLoaded", () => {
-  cbRenderNav();
-  if (!cbRequireAuth()) return;
-  user = cbCurrentUser();
+document.addEventListener("DOMContentLoaded", async () => {
+  await cbRenderNav();
+  if (!(await cbRequireAuth())) return;
+  user = await cbCurrentUser();
   document.querySelectorAll("[data-filter]").forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll("[data-filter]").forEach(b => b.classList.remove("active"));
@@ -13,12 +13,12 @@ document.addEventListener("DOMContentLoaded", () => {
       render();
     });
   });
-  render();
+  await render();
 });
 
-function render() {
+async function render() {
   const el = document.getElementById("txList");
-  let list = cbGetTransactions(user.email);
+  let list = await cbGetTransactions(user.email);
   if (currentFilter !== "all") list = list.filter(t => t.type === currentFilter);
 
   if (!list.length) {
@@ -29,9 +29,7 @@ function render() {
   el.innerHTML = list.map(tx => {
     const iconMap = { buy: "🛒", sell: "💸", deposit: "⬇️", withdraw: "⬆️" };
     const sign = (tx.type === "buy" || tx.type === "withdraw") ? "-" : "+";
-    const amountDisplay = tx.type === "deposit" || tx.type === "withdraw"
-      ? `$${(tx.total || 0).toFixed(2)}`
-      : `${sign}$${(tx.total || 0).toFixed(2)}`;
+    const amountDisplay = `$${(tx.total || 0).toFixed(2)}`;
     const cls = (tx.type === "sell" || tx.type === "deposit") ? "up" : "down";
     const sub = tx.coinSymbol
       ? `${sign}${(tx.amount || 0).toLocaleString()} ${tx.coinSymbol.toUpperCase()} @ ${cbFormatPrice(tx.price)}`
@@ -45,7 +43,7 @@ function render() {
           <div class="time">${new Date(tx.timestamp).toLocaleString()}</div>
         </div>
         <div class="tx-amount">
-          <div class="usd ${cls}">${amountDisplay}</div>
+          <div class="usd ${cls}">${sign}${amountDisplay}</div>
         </div>
       </div>`;
   }).join("");
