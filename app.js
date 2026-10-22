@@ -32,6 +32,22 @@ function renderSkeletons() {
   document.getElementById("discoveryList").innerHTML = Array(3).fill(row).join("");
 }
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function renderGreeting(user) {
+  const wrap = document.getElementById("greetingWrap");
+  if (!user) { wrap.style.display = "none"; return; }
+  wrap.style.display = "";
+  const firstName = user.name.split(" ")[0];
+  document.getElementById("greeting").innerHTML = `${getGreeting()}, <span class="name">${firstName}</span> 👋`;
+  document.getElementById("greetingSub").textContent = "Here's your portfolio today";
+}
+
 async function loadHomeData() {
   try {
     let res = await fetch(URL);
@@ -48,7 +64,31 @@ async function loadHomeData() {
   cbCheckAlerts(allCoins);
   renderTop5();
   renderDiscovery();
+  renderRecent();
   await renderBalanceCard();
+}
+
+function renderRecent() {
+  const panel = document.getElementById("recentPanel");
+  const row = document.getElementById("recentRow");
+  const user = cbCurrentUser();
+  if (!user) { panel.style.display = "none"; return; }
+  const recent = cbGetRecent();
+  if (!recent.length) { panel.style.display = "none"; return; }
+  panel.style.display = "";
+  row.innerHTML = recent.map(c => {
+    const change = c.change ?? 0;
+    const cls = change >= 0 ? "up" : "down";
+    const arrow = change >= 0 ? "▲" : "▼";
+    return `<div class="recent-card" data-id="${c.id}">
+      <div class="r-head"><img src="${c.image}" alt="${c.symbol}" /><span class="r-sym">${c.symbol.toUpperCase()}</span></div>
+      <div class="r-price">${cbFormatPrice(c.price)}</div>
+      <div class="r-chg ${cls}">${arrow} ${Math.abs(change).toFixed(2)}%</div>
+    </div>`;
+  }).join("");
+  row.querySelectorAll(".recent-card").forEach(card => {
+    card.addEventListener("click", () => { location.href = `coin.html?coin=${card.dataset.id}`; });
+  });
 }
 
 function sampleSpark(prices, count) {
@@ -89,7 +129,7 @@ function coinRowHTML(c) {
   const arrow = change >= 0 ? "▲" : "▼";
   const fav = cbGetFavorites().includes(c.id);
   const sampled = sampleSpark(c.sparkline_in_7d?.price || [], 30);
-  const spark = cbSparkline ? cbSparkline(sampled, 60, 24, change >= 0) : "";
+  const spark = cbSparkline(sampled, 60, 24, change >= 0);
   return `
     <div class="coin-row clickable" data-id="${c.id}">
       <button class="fav-btn ${fav ? 'active' : ''}" data-fav="${c.id}">★</button>
@@ -103,13 +143,18 @@ function coinRowHTML(c) {
 
 function bindCoinRows(container) {
   container.querySelectorAll(".fav-btn").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); cbToggleFavorite(btn.dataset.fav); renderDiscovery(); renderTop5(); }));
-  container.querySelectorAll(".coin-row.clickable").forEach(row => row.addEventListener("click", () => { location.href = `coin.html?coin=${row.dataset.id}`; }));
+  container.querySelectorAll(".coin-row.clickable").forEach(row => row.addEventListener("click", () => {
+    const coin = allCoins.find(c => c.id === row.dataset.id);
+    if (coin) cbPushRecent(coin);
+    location.href = `coin.html?coin=${row.dataset.id}`;
+  }));
 }
 
 async function renderBalanceCard() {
   const user = cbCurrentUser();
   const hero = document.getElementById("landingHero");
   const card = document.getElementById("balanceCard");
+  renderGreeting(user);
   if (!user) { hero.style.display = ""; card.style.display = "none"; return; }
   hero.style.display = "none"; card.style.display = "";
 
@@ -146,9 +191,7 @@ async function renderBalanceCard() {
     const plPct = (pl / totalCost) * 100;
     const plCls = pl >= 0 ? "up" : "down";
     plEl.innerHTML = `<span class="muted">P/L:</span> <span class="${plCls}">${cbFormatSigned(pl)} (${pl >= 0 ? "+" : ""}${plPct.toFixed(2)}%)</span>`;
-  } else {
-    plEl.innerHTML = "";
-  }
+  } else plEl.innerHTML = "";
 
   await drawChart(holdings, cash, chartRange);
 }
@@ -185,7 +228,6 @@ async function drawChart(holdings, cash, days) {
       chartEl.innerHTML = `<line x1="0" y1="70" x2="400" y2="70" stroke="var(--text-muted)" stroke-width="2" stroke-dasharray="4 4"/>`;
       return;
     }
-
     const range = max - min;
     const W = 400, H = 140;
     const scaled = points.map((p, i) => {
@@ -194,10 +236,8 @@ async function drawChart(holdings, cash, days) {
       p._x = x; p._y = y;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(" ");
-
     const up = points[points.length - 1].value >= points[0].value;
     const color = up ? "var(--up)" : "var(--down)";
-
     chartEl.innerHTML = `
       <defs>
         <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
@@ -210,7 +250,6 @@ async function drawChart(holdings, cash, days) {
       <line id="chartHoverLine" x1="0" y1="0" x2="0" y2="${H}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
       <circle id="chartHoverDot" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
     `;
-
     chartEl.onmousemove = (e) => {
       const rect = chartEl.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * W;
