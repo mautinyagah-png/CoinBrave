@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindModal();
   bindSearch();
   await loadAllCoins();
+  cbCheckAlerts(allCoins);
 });
 
 async function loadAllCoins() {
@@ -47,11 +48,7 @@ function handleQueryParams() {
 function renderTradeList(coins) {
   const list = document.getElementById("tradeList");
   const wallet = cbGetWallet(currentUser.email) || { usd: 0 };
-
-  if (!coins.length) {
-    list.innerHTML = `<div class="loading">No coins match your search.</div>`;
-    return;
-  }
+  if (!coins.length) { list.innerHTML = `<div class="loading">No coins match your search.</div>`; return; }
 
   list.innerHTML = coins.map(c => {
     const change = c.price_change_percentage_24h ?? 0;
@@ -78,19 +75,11 @@ function renderTradeList(coins) {
       </div>`;
   }).join("");
 
-  list.querySelectorAll(".fav-btn").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      cbToggleFavorite(btn.dataset.fav);
-      renderTradeList(coins);
-    });
-  });
-  list.querySelectorAll("button[data-side]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const coin = allCoins.find(x => x.id === btn.dataset.id);
-      if (coin) openModal(coin, btn.dataset.side);
-    });
-  });
+  list.querySelectorAll(".fav-btn").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); cbToggleFavorite(btn.dataset.fav); renderTradeList(coins); }));
+  list.querySelectorAll("button[data-side]").forEach(btn => btn.addEventListener("click", () => {
+    const coin = allCoins.find(x => x.id === btn.dataset.id);
+    if (coin) openModal(coin, btn.dataset.side);
+  }));
 }
 
 function bindSearch() {
@@ -98,10 +87,7 @@ function bindSearch() {
   input.addEventListener("input", () => {
     const q = input.value.trim().toLowerCase();
     if (!q) return renderTradeList(allCoins);
-    const filtered = allCoins.filter(c =>
-      c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q)
-    );
-    renderTradeList(filtered);
+    renderTradeList(allCoins.filter(c => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q)));
   });
 }
 
@@ -120,26 +106,18 @@ function openModal(coin, side) {
   const amountInput = document.getElementById("modalAmount");
   if (side === "sell") {
     const wallet = cbGetWallet(currentUser.email) || {};
-    const holding = wallet[coin.id] || 0;
-    amountInput.placeholder = `Max: ${holding}`;
-  } else {
-    amountInput.placeholder = "0.00";
-  }
+    amountInput.placeholder = `Max: ${wallet[coin.id] || 0}`;
+  } else amountInput.placeholder = "0.00";
 
   document.getElementById("tradeModal").classList.remove("hidden");
   amountInput.focus();
 }
 
-function closeModal() {
-  currentTrade = null;
-  document.getElementById("tradeModal").classList.add("hidden");
-}
+function closeModal() { currentTrade = null; document.getElementById("tradeModal").classList.add("hidden"); }
 
 function bindModal() {
   document.getElementById("modalClose").addEventListener("click", closeModal);
-  document.getElementById("tradeModal").addEventListener("click", (e) => {
-    if (e.target.id === "tradeModal") closeModal();
-  });
+  document.getElementById("tradeModal").addEventListener("click", (e) => { if (e.target.id === "tradeModal") closeModal(); });
   document.getElementById("modalAmount").addEventListener("input", recalcTotal);
   document.getElementById("modalConfirm").addEventListener("click", confirmTrade);
 }
@@ -162,29 +140,43 @@ function confirmTrade() {
   const showError = (m) => { errEl.textContent = m; errEl.classList.add("show"); };
 
   if (!amount || amount <= 0 || isNaN(amount)) return showError("Enter a valid amount.");
-
   const total = amount * coin.current_price;
   const fee = total * FEE_RATE;
   const totalWithFee = total + fee;
   const wallet = cbGetWallet(currentUser.email) || { usd: 0 };
 
   if (side === "buy") {
-    if (totalWithFee > wallet.usd) {
-      return showError(`Insufficient USD. You have $${wallet.usd.toFixed(2)}, need $${totalWithFee.toFixed(2)}.`);
-    }
+    if (totalWithFee > wallet.usd) return showError(`Insufficient USD. You have $${wallet.usd.toFixed(2)}, need $${totalWithFee.toFixed(2)}.`);
     wallet.usd = +(wallet.usd - totalWithFee).toFixed(2);
     wallet[coin.id] = +(((wallet[coin.id] || 0) + amount).toFixed(8));
   } else {
     const holding = wallet[coin.id] || 0;
-    if (amount > holding + 1e-9) {
-      return showError(`Insufficient ${coin.symbol.toUpperCase()}. You have ${holding}.`);
-    }
+    if (amount > holding + 1e-9) return showError(`Insufficient ${coin.symbol.toUpperCase()}. You have ${holding}.`);
     wallet[coin.id] = +((holding - amount).toFixed(8));
     if (wallet[coin.id] <= 0) delete wallet[coin.id];
     wallet.usd = +(wallet.usd + total - fee).toFixed(2);
   }
 
   cbSaveWallet(currentUser.email, wallet);
+
+  cbAddTransaction(currentUser.email, {
+    type: side,
+    coinId: coin.id,
+    coinName: coin.name,
+    coinSymbol: coin.symbol,
+    coinImage: coin.image,
+    amount,
+    price: coin.current_price,
+    total,
+    fee
+  });
+
+  cbAddNotification(currentUser.email, {
+    type: "trade",
+    title: `${side === "buy" ? "Bought" : "Sold"} ${amount} ${coin.symbol.toUpperCase()}`,
+    body: `@ ${cbFormatPrice(coin.current_price)} · Total $${total.toFixed(2)}`
+  });
+
   closeModal();
   renderTradeList(allCoins);
   showToast(`${side === "buy" ? "Bought" : "Sold"} ${amount.toLocaleString()} ${coin.symbol.toUpperCase()} for $${total.toFixed(2)}`);
@@ -193,8 +185,7 @@ function confirmTrade() {
 let toastTimer = null;
 function showToast(msg) {
   const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
+  t.textContent = msg; t.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove("show"), 3200);
 }
