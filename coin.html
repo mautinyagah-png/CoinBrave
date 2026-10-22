@@ -23,7 +23,10 @@
     <a href="market.html" id="backBtn" class="btn-outline" style="display:inline-block;align-self:flex-start;text-decoration:none;padding:8px 14px;font-size:0.85rem">← Back</a>
 
     <section class="panel">
-      <div id="coinHeader" class="coin-detail-header"><div class="loading">Loading coin…</div></div>
+      <div id="coinHeader" class="coin-detail-header">
+        <div class="skeleton" style="width:48px;height:48px;border-radius:50%"></div>
+        <div style="flex:1"><div class="skeleton" style="width:120px;height:16px;margin-bottom:8px"></div><div class="skeleton" style="width:80px;height:12px"></div></div>
+      </div>
       <div class="coin-detail-price" id="coinPrice"></div>
       <div class="range-tabs" style="justify-content:flex-start;margin-bottom:12px">
         <button data-days="1">1D</button>
@@ -38,6 +41,9 @@
     </section>
 
     <section class="panel">
+      <div class="btn-row" style="margin-bottom:12px">
+        <button id="coinFavBtn" class="btn-outline" style="display:block">☆ Add to Favorites</button>
+      </div>
       <div class="btn-row">
         <a href="#" id="coinBuyBtn" class="btn-buy" style="text-align:center;padding:14px;display:block;font-size:1rem;text-decoration:none">Buy</a>
         <a href="#" id="coinSellBtn" class="btn-sell" style="text-align:center;padding:14px;display:block;font-size:1rem;text-decoration:none">Sell</a>
