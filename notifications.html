@@ -29,22 +29,24 @@
     </section>
   </main>
 
+  <script src="supabase.js"></script>
   <script src="auth.js"></script>
   <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      cbRenderNav();
-      if (!cbRequireAuth()) return;
-      const user = cbCurrentUser();
-      render(user);
-      document.getElementById("markReadBtn").addEventListener("click", () => {
-        cbMarkNotificationsRead(user.email);
-        render(user);
+    let user = null;
+    document.addEventListener("DOMContentLoaded", async () => {
+      await cbRenderNav();
+      if (!(await cbRequireAuth())) return;
+      user = await cbCurrentUser();
+      await render();
+      document.getElementById("markReadBtn").addEventListener("click", async () => {
+        await cbMarkNotificationsRead(user.email);
+        await render();
       });
     });
 
-    function render(user) {
+    async function render() {
       const el = document.getElementById("notifList");
-      const list = cbGetNotifications(user.email);
+      const list = await cbGetNotifications(user.email);
       if (!list.length) {
         el.innerHTML = `<div class="empty"><span class="emoji">🔔</span>No notifications yet.</div>`;
         return;
