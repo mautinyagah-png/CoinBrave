@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CoinBrave — Live Markets</title>
+  <title>Home — CoinBrave</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -20,17 +20,45 @@
   </header>
 
   <main class="container">
+    <section class="balance-card">
+      <div class="balance-header">
+        <div>
+          <div class="balance-label">Portfolio Balance</div>
+          <div class="balance-value" id="balanceValue">—</div>
+          <div class="balance-change" id="balanceChange">—</div>
+        </div>
+        <button class="balance-toggle" id="balanceToggle" aria-label="Hide chart">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
+      <div class="chart-wrap" id="chartWrap">
+        <svg class="balance-chart" id="balanceChart" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
+        <div class="range-tabs">
+          <button data-range="1">1D</button>
+          <button data-range="7" class="active">1W</button>
+          <button data-range="30">1M</button>
+          <button data-range="365">1Y</button>
+        </div>
+      </div>
+    </section>
+
     <section class="panel">
-      <h2>Top 5 Coins</h2>
-      <div id="top5" class="coin-list"><div class="loading">Loading prices…</div></div>
+      <div class="discovery-tabs">
+        <button data-tab="favorites" class="active">★ Favorites</button>
+        <button data-tab="gainers">Top Gainers</button>
+        <button data-tab="losers">Top Losers</button>
+      </div>
+      <div id="discoveryList" class="coin-list"><div class="loading">Loading…</div></div>
     </section>
 
     <section class="panel">
       <div class="panel-header">
-        <h2>Trade — All Other Coins</h2>
-        <a href="trade.html" class="btn-viewall">View all →</a>
+        <h2>Top 5 Coins</h2>
+        <a href="market.html" class="btn-viewall">More →</a>
       </div>
-      <div id="others" class="coin-list"><div class="loading">Loading prices…</div></div>
+      <div id="top5" class="coin-list"><div class="loading">Loading prices…</div></div>
     </section>
   </main>
 
