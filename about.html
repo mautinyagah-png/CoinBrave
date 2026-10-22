@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About — CoinBrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">
+      <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 1.8 3.6 5.5v6.2c0 5 3.5 9.1 8.4 10.5 4.9-1.4 8.4-5.5 8.4-10.5V5.5L12 1.8z" fill="#f0b90b"/>
+        <path d="M12 5.5 6.6 8v3.7c0 3.1 2.1 5.7 5.4 6.6 3.3-.9 5.4-3.5 5.4-6.6V8L12 5.5z" fill="#0b0e11"/>
+        <text x="12" y="15.3" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="6.2" font-weight="800" fill="#f0b90b">B</text>
+      </svg>
+      <span>CoinBrave</span>
+    </div>
+    <nav class="nav"></nav>
+  </header>
+
+  <main class="container">
+    <section class="panel" style="text-align:center">
+      <div style="font-size:3rem;margin-bottom:12px">🛡️</div>
+      <h2 style="font-size:1.5rem;margin-bottom:8px">About CoinBrave</h2>
+      <p class="muted" style="max-width:600px;margin:0 auto 20px">
+        CoinBrave is a demo cryptocurrency trading platform built for learning and experimenting with a real trading UI — without touching real money.
+      </p>
+    </section>
+
+    <section class="panel">
+      <h2>How it works</h2>
+      <ul style="list-style:none;padding:0;font-size:0.92rem;line-height:1.8;color:var(--text-dim)">
+        <li>📊 <b>Live prices</b> from the public CoinGecko API — same data real platforms use</li>
+        <li>💰 <b>$5,000 demo balance</b> on signup, plus a starter portfolio of 6 coins</li>
+        <li>📈 <b>Real trading flow</b> — buy/sell any coin with a 0.1% simulated fee</li>
+        <li>🎯 <b>Price alerts</b> that actually trigger when markets move</li>
+        <li>📜 <b>Full history</b> of every trade, deposit, and withdrawal</li>
+        <li>💾 <b>Everything stored</b> in your own browser — no server, no tracking</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>FAQ</h2>
+      <details style="margin-bottom:12px;padding:12px;background:var(--bg);border-radius:8px">
+        <summary style="cursor:pointer;font-weight:600">Is this real money?</summary>
+        <p class="muted" style="margin-top:8px;font-size:0.88rem">No. All balances are simulated. No real crypto is bought, sold, or held. This is purely a demo.</p>
+      </details>
+      <details style="margin-bottom:12px;padding:12px;background:var(--bg);border-radius:8px">
+        <summary style="cursor:pointer;font-weight:600">Where is my data stored?</summary>
+        <p class="muted" style="margin-top:8px;font-size:0.88rem">Locally in your browser using <code>localStorage</code>. It never leaves your device. Clearing browser data erases your account.</p>
+      </details>
+      <details style="margin-bottom:12px;padding:12px;background:var(--bg);border-radius:8px">
+        <summary style="cursor:pointer;font-weight:600">Can I use it on multiple devices?</summary>
+        <p class="muted" style="margin-top:8px;font-size:0.88rem">Not yet — accounts are per-browser. Multi-device sync requires a real backend (planned).</p>
+      </details>
+      <details style="margin-bottom:12px;padding:12px;background:var(--bg);border-radius:8px">
+        <summary style="cursor:pointer;font-weight:600">How are prices updated?</summary>
+        <p class="muted" style="margin-top:8px;font-size:0.88rem">Prices refresh every 60 seconds from CoinGecko. Charts use cached data for the last hour to avoid rate limits.</p>
+      </details>
+      <details style="margin-bottom:12px;padding:12px;background:var(--bg);border-radius:8px">
+        <summary style="cursor:pointer;font-weight:600">What's P/L?</summary>
+        <p class="muted" style="margin-top:8px;font-size:0.88rem">Profit/Loss. CoinBrave tracks your average buy price per coin. When the current price is higher, you see green (profit). Lower, red (loss).</p>
+      </details>
+      <details style="padding:12px;background:var(--bg);border-radius:8px">
+        <summary style="cursor:pointer;font-weight:600">Can I delete my account?</summary>
+        <p class="muted" style="margin-top:8px;font-size:0.88rem">Yes — Settings → Danger Zone → Delete My Account. This erases everything from your browser forever.</p>
+      </details>
+    </section>
+
+    <section class="panel" style="text-align:center">
+      <h2>Contact</h2>
+      <p class="muted" style="margin-bottom:16px">Questions or feedback?</p>
+      <a href="mailto:support@coinbrave.demo" class="btn-primary" style="display:inline-block;max-width:300px;text-decoration:none;color:var(--on-accent)">support@coinbrave.demo</a>
+    </section>
+  </main>
+
+  <script src="auth.js"></script>
+  <script>document.addEventListener('DOMContentLoaded', () => cbRenderNav());</script>
+</body>
+</html>
