@@ -33,16 +33,23 @@
           <div class="sub">Available to trade</div>
         </div>
         <div class="stat-card">
-          <div class="label">Assets</div>
-          <div id="assetCount" class="value">—</div>
-          <div class="sub">Coins in wallet</div>
+          <div class="label">Total P/L</div>
+          <div id="totalPL" class="value">—</div>
+          <div id="totalPLPct" class="sub">—</div>
         </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="funds-actions">
+        <button id="depositBtn" class="btn-deposit">⬇️ Deposit</button>
+        <button id="withdrawBtn" class="btn-withdraw">⬆️ Withdraw</button>
       </div>
     </section>
 
     <section class="panel">
       <h2>Your Holdings</h2>
-      <div id="holdings" class="coin-list"><div class="loading">Loading live prices…</div></div>
+      <div id="holdings" class="coin-list"></div>
     </section>
   </main>
 
