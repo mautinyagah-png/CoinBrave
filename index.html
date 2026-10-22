@@ -1,22 +1,33 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Nexara — Live Markets</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CoinBrave — Live Markets</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header><h1>Nexara</h1></header>
+  <header class="topbar">
+    <div class="logo">🦁 CoinBrave</div>
+    <nav class="nav">
+      <a class="active" href="#">Markets</a>
+      <a href="#">Trade</a>
+      <a href="#">Wallet</a>
+      <a href="#" class="btn-signup">Sign Up</a>
+    </nav>
+  </header>
 
-  <section>
-    <h2>Top 5 Coins</h2>
-    <div id="top5"></div>
-  </section>
+  <main class="container">
+    <section class="panel">
+      <h2>Top 5 Coins</h2>
+      <div id="top5" class="coin-list"></div>
+    </section>
 
-  <section>
-    <h2>Trade — All Other Coins</h2>
-    <div id="others"></div>
-  </section>
+    <section class="panel">
+      <h2>Trade — All Other Coins</h2>
+      <div id="others" class="coin-list"></div>
+    </section>
+  </main>
 
   <script src="app.js"></script>
 </body>
