@@ -38,10 +38,12 @@ function cbRenderNav() {
   const user = cbCurrentUser();
   const path = (location.pathname.split("/").pop() || "index.html");
   const is = (p) => path === p ? "active" : "";
+  const isMarkets = (path === "" || path === "index.html") ? "active" : "";
 
   if (user) {
     nav.innerHTML = `
-      <a href="index.html" class="${is('index.html') || path === '' ? 'active' : ''}">Markets</a>
+      <a href="index.html" class="${isMarkets}">Markets</a>
+      <a href="trade.html" class="${is('trade.html')}">Trade</a>
       <a href="wallet.html" class="${is('wallet.html')}">Wallet</a>
       <span class="user-chip">👤 ${user.name}</span>
       <a href="#" id="logoutBtn" class="btn-signup">Log Out</a>`;
@@ -52,7 +54,8 @@ function cbRenderNav() {
     });
   } else {
     nav.innerHTML = `
-      <a href="index.html" class="${is('index.html') || path === '' ? 'active' : ''}">Markets</a>
+      <a href="index.html" class="${isMarkets}">Markets</a>
+      <a href="trade.html" class="${is('trade.html')}">Trade</a>
       <a href="login.html" class="${is('login.html')}">Log In</a>
       <a href="signup.html" class="btn-signup ${is('signup.html')}">Sign Up</a>`;
   }
