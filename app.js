@@ -24,9 +24,9 @@ async function loadCoins() {
   } catch (err) {
     console.error("loadCoins failed:", err);
     const msg = `
-      <div style="color:#f6465d;padding:16px;font-size:0.9rem">
+      <div class="error-box">
         ⚠️ Could not load prices: <b>${err.message}</b><br>
-        Open DevTools (F12) → Console for details, then tell me what it says.
+        Open DevTools (F12) → Console for details.
       </div>`;
     document.getElementById("top5").innerHTML   = msg;
     document.getElementById("others").innerHTML = "";
