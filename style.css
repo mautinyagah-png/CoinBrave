@@ -1,3 +1,83 @@
-git add .
-git commit -m "feat: live market data with top 5 and trade list"
-git push origin main
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #0b0e11;
+  color: #eaecef;
+  line-height: 1.5;
+}
+
+/* Top navigation bar */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  background: #12161c;
+  border-bottom: 1px solid #1e2329;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.logo { font-size: 1.4rem; font-weight: 700; color: #f0b90b; }
+.nav { display: flex; gap: 24px; align-items: center; }
+.nav a { color: #eaecef; text-decoration: none; font-size: 0.95rem; }
+.nav a:hover, .nav a.active { color: #f0b90b; }
+.btn-signup {
+  background: #f0b90b;
+  color: #0b0e11 !important;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+/* Layout */
+.container {
+  max-width: 1200px;
+  margin: 24px auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Panels */
+.panel {
+  background: #12161c;
+  border: 1px solid #1e2329;
+  border-radius: 10px;
+  padding: 20px;
+}
+.panel h2 {
+  font-size: 1.1rem;
+  margin-bottom: 16px;
+  color: #f0b90b;
+}
+
+/* Coin rows */
+.coin-list { display: flex; flex-direction: column; }
+.coin-row {
+  display: grid;
+  grid-template-columns: 40px 2fr 1fr 1fr;
+  align-items: center;
+  padding: 12px 8px;
+  border-bottom: 1px solid #1e2329;
+  transition: background 0.15s;
+}
+.coin-row:last-child { border-bottom: none; }
+.coin-row:hover { background: #1a1f27; }
+.coin-row img { width: 26px; height: 26px; border-radius: 50%; }
+.coin-row .name { font-weight: 500; }
+.coin-row .price { text-align: right; font-variant-numeric: tabular-nums; }
+.coin-row .up,
+.coin-row .down { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.up { color: #0ecb81; }
+.down { color: #f6465d; }
+
+/* Mobile */
+@media (max-width: 600px) {
+  .coin-row { grid-template-columns: 32px 1fr 1fr; font-size: 0.85rem; }
+  .coin-row .price { display: none; } /* hide price on tiny screens, keep % */
+  .topbar { padding: 12px 16px; }
+  .nav { gap: 12px; }
+}
