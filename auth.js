@@ -1,4 +1,43 @@
 // CoinBrave shared helpers
+
+// ---- auto-inject favicon / manifest / theme meta ----
+(function cbInjectHead() {
+  if (typeof document === 'undefined') return;
+  if (!document.querySelector('link[rel="icon"]')) {
+    const f = document.createElement('link');
+    f.rel = 'icon'; f.type = 'image/svg+xml'; f.href = 'favicon.svg';
+    document.head.appendChild(f);
+  }
+  if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+    const a = document.createElement('link');
+    a.rel = 'apple-touch-icon'; a.href = 'favicon.svg';
+    document.head.appendChild(a);
+  }
+  if (!document.querySelector('link[rel="manifest"]')) {
+    const m = document.createElement('link');
+    m.rel = 'manifest'; m.href = 'manifest.json';
+    document.head.appendChild(m);
+  }
+  if (!document.querySelector('meta[name="theme-color"]')) {
+    const t = document.createElement('meta');
+    t.name = 'theme-color'; t.content = '#0b0e11';
+    document.head.appendChild(t);
+  }
+  if (!document.querySelector('meta[name="apple-mobile-web-app-capable"]')) {
+    const m1 = document.createElement('meta');
+    m1.name = 'apple-mobile-web-app-capable'; m1.content = 'yes';
+    document.head.appendChild(m1);
+    const m2 = document.createElement('meta');
+    m2.name = 'apple-mobile-web-app-status-bar-style'; m2.content = 'black-translucent';
+    document.head.appendChild(m2);
+  }
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
+    });
+  }
+})();
+
 const CB_USERS_KEY     = "cb_users";
 const CB_SESSION_KEY   = "cb_session";
 const CB_WALLET_PREFIX = "cb_wallet_";
@@ -7,6 +46,7 @@ const CB_REDIRECT_KEY  = "cb_redirect";
 const CB_TX_PREFIX     = "cb_tx_";
 const CB_ALERTS_PREFIX = "cb_alerts_";
 const CB_NOTIF_PREFIX  = "cb_notif_";
+const CB_HISTORY_PREFIX= "cb_history_";
 const CB_THEME_KEY     = "cb_theme";
 
 const CB_EMOJIS = ["🦁","🐂","🐻","🦊","🐺","🐯","🦄","🐳","🦈","🐬","🦅","🐉","🚀","💎","🌙","⭐","🔥","🎯","🎨","🧠"];
@@ -27,28 +67,30 @@ function cbCurrentUser() {
 function cbEnsureUserFields(user) {
   if (!user) return null;
   let changed = false;
-  if (!user.userId) {
-    user.userId = "CB-" + Math.random().toString(36).slice(2, 8).toUpperCase();
-    changed = true;
-  }
-  if (!user.avatarEmoji && !user.avatarImage) {
-    user.avatarEmoji = "🦁";
-    changed = true;
-  }
+  if (!user.userId) { user.userId = "CB-" + Math.random().toString(36).slice(2, 8).toUpperCase(); changed = true; }
+  if (!user.avatarEmoji && !user.avatarImage) { user.avatarEmoji = "🦁"; changed = true; }
   if (changed) {
     const users = cbGetUsers();
     const idx = users.findIndex(u => u.email === user.email);
-    if (idx >= 0) {
-      users[idx].userId = user.userId;
-      users[idx].avatarEmoji = user.avatarEmoji;
-      cbSaveUsers(users);
-    }
+    if (idx >= 0) { users[idx].userId = user.userId; users[idx].avatarEmoji = user.avatarEmoji; cbSaveUsers(users); }
   }
   return user;
 }
 
 function cbGetWallet(email) { try { return JSON.parse(localStorage.getItem(CB_WALLET_PREFIX + email) || "null"); } catch { return null; } }
 function cbSaveWallet(email, wallet) { localStorage.setItem(CB_WALLET_PREFIX + email, JSON.stringify(wallet)); }
+
+function cbDefaultWallet() {
+  return {
+    usd: 5000,
+    bitcoin: 0.03,
+    ethereum: 0.5,
+    solana: 5,
+    dogecoin: 5000,
+    cardano: 1000,
+    chainlink: 10
+  };
+}
 
 async function cbHashPassword(password) {
   const enc = new TextEncoder().encode(password + "::coinbrave::salt");
@@ -71,6 +113,22 @@ function cbFormatPrice(p) {
   if (p >= 1) return "$" + p.toLocaleString(undefined, { maximumFractionDigits: 2 });
   if (p >= 0.01) return "$" + p.toFixed(4);
   return "$" + p.toFixed(6);
+}
+
+function cbSparkline(prices, width, height, up) {
+  width = width || 60; height = height || 24;
+  if (!prices || prices.length < 2) return "";
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 1;
+  const step = width / (prices.length - 1);
+  const pts = prices.map((p, i) => {
+    const x = i * step;
+    const y = height - ((p - min) / range) * (height - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const color = up ? "var(--up)" : "var(--down)";
+  return `<svg class="sparkline" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 
 function cbGetTransactions(email) { try { return JSON.parse(localStorage.getItem(CB_TX_PREFIX + email) || "[]"); } catch { return []; } }
@@ -134,6 +192,19 @@ function cbCheckAlerts(coins) {
   if (changed) cbSaveAlerts(user.email, alerts);
 }
 
+function cbGetHistory(email) { try { return JSON.parse(localStorage.getItem(CB_HISTORY_PREFIX + email) || "[]"); } catch { return []; } }
+function cbSaveHistory(email, list) { localStorage.setItem(CB_HISTORY_PREFIX + email, JSON.stringify(list)); }
+function cbSnapshotPortfolio(email, totalUsd) {
+  if (!email || totalUsd == null || isNaN(totalUsd)) return;
+  const history = cbGetHistory(email);
+  const today = new Date().toISOString().slice(0, 10);
+  const last = history[history.length - 1];
+  if (last && last.date === today) last.value = +totalUsd.toFixed(2);
+  else history.push({ date: today, value: +totalUsd.toFixed(2) });
+  if (history.length > 365) history.splice(0, history.length - 365);
+  cbSaveHistory(email, history);
+}
+
 function cbGetTheme() { return localStorage.getItem(CB_THEME_KEY) || "dark"; }
 function cbSetTheme(t) {
   localStorage.setItem(CB_THEME_KEY, t);
@@ -156,6 +227,46 @@ function cbRenderAvatarHTML(user, size) {
   if (!user) return "";
   if (user.avatarImage) return `<img src="${user.avatarImage}" alt="avatar" style="width:${s}px;height:${s}px;border-radius:50%;object-fit:cover" />`;
   return `<span class="avatar-emoji" style="font-size:${Math.round(s * 0.7)}px">${user.avatarEmoji || "🦁"}</span>`;
+}
+
+function cbEnablePullToRefresh(onRefresh) {
+  let startY = 0, pulling = false, indicator = null;
+  function ensureIndicator() {
+    if (indicator) return indicator;
+    indicator = document.createElement("div");
+    indicator.className = "ptr-indicator";
+    indicator.innerHTML = '<div class="ptr-spinner"></div>';
+    document.body.appendChild(indicator);
+    return indicator;
+  }
+  document.addEventListener("touchstart", (e) => {
+    if (window.scrollY <= 0 && !pulling) { startY = e.touches[0].clientY; pulling = true; }
+  }, { passive: true });
+  document.addEventListener("touchmove", (e) => {
+    if (!pulling) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy > 8) {
+      const ind = ensureIndicator();
+      ind.style.opacity = Math.min(1, dy / 80);
+      ind.style.transform = `translate(-50%, ${Math.min(dy - 30, 30)}px)`;
+    }
+    if (dy > 90) {
+      pulling = false;
+      const ind = ensureIndicator();
+      ind.classList.add("active");
+      ind.style.opacity = "1";
+      ind.style.transform = "translate(-50%, 30px)";
+      Promise.resolve(onRefresh()).finally(() => {
+        setTimeout(() => { ind.classList.remove("active"); ind.style.opacity = ""; ind.style.transform = ""; }, 500);
+      });
+    }
+  }, { passive: true });
+  document.addEventListener("touchend", () => {
+    if (pulling) {
+      pulling = false;
+      if (indicator) { indicator.style.opacity = ""; indicator.style.transform = ""; }
+    }
+  }, { passive: true });
 }
 
 function cbRenderNav() {
@@ -238,6 +349,8 @@ function cbRenderProfileDrawer(user) {
       <nav class="drawer-menu">
         <a href="index.html" class="drawer-item"><span class="drawer-icon">🏠</span><span>Home</span></a>
         <a href="market.html" class="drawer-item"><span class="drawer-icon">📊</span><span>Market</span></a>
+        <a href="privacy.html" class="drawer-item"><span class="drawer-icon">🔒</span><span>Privacy</span></a>
+        <a href="terms.html" class="drawer-item"><span class="drawer-icon">📄</span><span>Terms</span></a>
         <a href="login.html" class="drawer-item"><span class="drawer-icon">🔑</span><span>Log In</span></a>
         <a href="signup.html" class="drawer-item"><span class="drawer-icon">✨</span><span>Sign Up</span></a>
       </nav>`;
@@ -257,6 +370,8 @@ function cbRenderProfileDrawer(user) {
         <a href="referral.html" class="drawer-item"><span class="drawer-icon">🤝</span><span>Referral</span></a>
         <a href="notifications.html" class="drawer-item"><span class="drawer-icon">🔔</span><span>Notifications</span>${unread > 0 ? `<span class="notif-badge">${unread}</span>` : ""}</a>
         <a href="settings.html" class="drawer-item"><span class="drawer-icon">⚙️</span><span>Settings</span></a>
+        <a href="privacy.html" class="drawer-item"><span class="drawer-icon">🔒</span><span>Privacy</span></a>
+        <a href="terms.html" class="drawer-item"><span class="drawer-icon">📄</span><span>Terms</span></a>
         <button id="cbDrawerLogout" class="drawer-item drawer-logout"><span class="drawer-icon">🚪</span><span>Log Out</span></button>
       </nav>`;
     document.getElementById("cbDrawerLogout").addEventListener("click", () => { cbClearSession(); location.href = "index.html"; });
@@ -269,10 +384,7 @@ function cbRenderProfileDrawer(user) {
   if (logo && !logo._cbBound) {
     logo._cbBound = true;
     logo.style.cursor = "pointer";
-    logo.addEventListener("click", () => {
-      if (cbCurrentUser()) cbOpenDrawer();
-      else location.href = "index.html";
-    });
+    logo.addEventListener("click", () => { if (cbCurrentUser()) cbOpenDrawer(); else location.href = "index.html"; });
   }
 }
 
@@ -295,7 +407,6 @@ function cbCloseDrawer() {
 
 function cbRenderAIHelper() {
   if (document.getElementById("cbAIButton")) return;
-
   const btn = document.createElement("button");
   btn.id = "cbAIButton";
   btn.className = "ai-btn";
@@ -307,10 +418,7 @@ function cbRenderAIHelper() {
   panel.id = "cbAIPanel";
   panel.className = "ai-panel hidden";
   panel.innerHTML = `
-    <div class="ai-header">
-      <span>🧠 CoinBrave Assistant</span>
-      <button id="cbAIClose" class="ai-close">×</button>
-    </div>
+    <div class="ai-header"><span>🧠 CoinBrave Assistant</span><button id="cbAIClose" class="ai-close">×</button></div>
     <div class="ai-body">
       <p class="ai-intro">Hi! I'm your helper. Pick a topic 👇</p>
       <div class="ai-chips">
@@ -320,11 +428,11 @@ function cbRenderAIHelper() {
         <button data-topic="alerts">🔔 Set a price alert</button>
         <button data-topic="rewards">🎁 Daily rewards</button>
         <button data-topic="deposit">💵 Deposit / Withdraw</button>
+        <button data-topic="install">📲 Install as app</button>
         <button data-topic="support">📞 Contact support</button>
       </div>
       <div id="cbAIAnswer" class="ai-answer"></div>
     </div>`;
-
   document.body.appendChild(btn);
   document.body.appendChild(panel);
 
@@ -349,8 +457,7 @@ function cbRenderAIHelper() {
     if (!moved) return;
     btn.style.left = (e.clientX - offX) + "px";
     btn.style.top = (e.clientY - offY) + "px";
-    btn.style.right = "auto";
-    btn.style.bottom = "auto";
+    btn.style.right = "auto"; btn.style.bottom = "auto";
   });
   btn.addEventListener("pointerup", (e) => {
     dragging = false;
@@ -372,6 +479,7 @@ function cbAIAnswerFor(topic) {
     case "alerts": return `<p>Go to <a href="settings.html">Settings</a> → <b>Price Alerts</b> → pick a coin, price, and direction.</p>`;
     case "rewards": return `<p>Visit the <a href="rewards.html">Rewards Hub</a> to claim $5 daily.</p>`;
     case "deposit": return `<p>Go to <a href="settings.html">Settings → Deposit / Withdraw</a>.</p>`;
+    case "install": return `<p>On mobile, tap your browser's <b>Share</b> menu → <b>Add to Home Screen</b>. On desktop Chrome, look for the <b>install</b> icon in the address bar.</p>`;
     case "support": return `<p>Email <a href="mailto:support@coinbrave.demo">support@coinbrave.demo</a>.</p>`;
     default: return "";
   }
