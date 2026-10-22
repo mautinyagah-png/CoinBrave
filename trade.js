@@ -58,7 +58,7 @@ function renderTradeList(coins) {
     const fav = cbGetFavorites().includes(c.id);
     return `
       <div class="trade-row" data-id="${c.id}">
-        <button class="fav-btn ${fav ? 'active' : ''}" data-fav="${c.id}" aria-label="Toggle favorite">★</button>
+        <button class="fav-btn ${fav ? 'active' : ''}" data-fav="${c.id}">★</button>
         <img src="${c.image}" alt="${c.symbol}" />
         <div class="info">
           <div class="name">${c.name} <span class="muted">(${c.symbol.toUpperCase()})</span></div>
@@ -149,26 +149,21 @@ function confirmTrade() {
     if (totalWithFee > wallet.usd) return showError(`Insufficient USD. You have $${wallet.usd.toFixed(2)}, need $${totalWithFee.toFixed(2)}.`);
     wallet.usd = +(wallet.usd - totalWithFee).toFixed(2);
     wallet[coin.id] = +(((wallet[coin.id] || 0) + amount).toFixed(8));
+    cbSaveWallet(currentUser.email, wallet);
+    cbUpdateAvgOnBuy(currentUser.email, coin.id, amount, coin.current_price);
   } else {
     const holding = wallet[coin.id] || 0;
     if (amount > holding + 1e-9) return showError(`Insufficient ${coin.symbol.toUpperCase()}. You have ${holding}.`);
     wallet[coin.id] = +((holding - amount).toFixed(8));
     if (wallet[coin.id] <= 0) delete wallet[coin.id];
     wallet.usd = +(wallet.usd + total - fee).toFixed(2);
+    cbSaveWallet(currentUser.email, wallet);
+    cbUpdateAvgOnSell(currentUser.email, coin.id);
   }
 
-  cbSaveWallet(currentUser.email, wallet);
-
   cbAddTransaction(currentUser.email, {
-    type: side,
-    coinId: coin.id,
-    coinName: coin.name,
-    coinSymbol: coin.symbol,
-    coinImage: coin.image,
-    amount,
-    price: coin.current_price,
-    total,
-    fee
+    type: side, coinId: coin.id, coinName: coin.name, coinSymbol: coin.symbol, coinImage: coin.image,
+    amount, price: coin.current_price, total, fee
   });
 
   cbAddNotification(currentUser.email, {
@@ -185,6 +180,7 @@ function confirmTrade() {
 let toastTimer = null;
 function showToast(msg) {
   const t = document.getElementById("toast");
+  if (!t) return;
   t.textContent = msg; t.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove("show"), 3200);
