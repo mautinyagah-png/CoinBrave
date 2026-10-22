@@ -4,27 +4,20 @@ let avatarEditOpen = false;
 const PROXY = "https://api.allorigins.win/raw?url=";
 
 document.addEventListener("DOMContentLoaded", async () => {
-  cbRenderNav();
-  if (!cbRequireAuth()) return;
-  user = cbCurrentUser();
+  await cbRenderNav();
+  if (!(await cbRequireAuth())) return;
+  user = await cbCurrentUser();
   renderEmojiGrid();
   renderProfile();
   renderTheme();
   bindProfile();
   bindTheme();
   await loadCoinsForAlerts();
-  renderAlerts();
+  await renderAlerts();
   bindAlerts();
   bindResetWallet();
   bindDeleteAccount();
 });
-
-function saveUser(updated) {
-  const users = cbGetUsers();
-  const idx = users.findIndex(u => u.email === updated.email);
-  if (idx >= 0) { users[idx] = updated; cbSaveUsers(users); }
-  user = updated;
-}
 
 function renderProfile() {
   document.getElementById("nameInput").value = user.name;
@@ -49,8 +42,7 @@ function renderProfile() {
     editArea.classList.add("show");
   }
 
-  const clearBtn = document.getElementById("clearImageBtn");
-  clearBtn.style.display = user.avatarImage ? "block" : "none";
+  document.getElementById("clearImageBtn").style.display = user.avatarImage ? "block" : "none";
 }
 
 function renderEmojiGrid() {
@@ -67,11 +59,20 @@ function renderEmojiGrid() {
 }
 
 function bindProfile() {
-  document.getElementById("saveProfileBtn").addEventListener("click", () => {
-    user.name = document.getElementById("nameInput").value.trim() || user.name;
-    saveUser(user);
+  document.getElementById("saveProfileBtn").addEventListener("click", async () => {
+    const newName = document.getElementById("nameInput").value.trim() || user.name;
+    const updates = {
+      name: newName,
+      avatar_emoji: user.avatarEmoji || "🦁",
+      avatar_image: user.avatarImage || null,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await window.sb.from("profiles").update(updates).eq("id", user.id);
+    if (error) { alert("Save failed: " + error.message); return; }
+    cbInvalidateUserCache();
+    user = await cbCurrentUser();
     avatarEditOpen = false;
-    cbRenderNav();
+    await cbRenderNav();
     showToast("Profile saved");
     renderProfile();
   });
@@ -81,11 +82,7 @@ function bindProfile() {
     if (!file) return;
     if (file.size > 200 * 1024) { alert("Image too large. Max 200KB."); return; }
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      user.avatarImage = ev.target.result;
-      avatarEditOpen = true;
-      renderProfile();
-    };
+    reader.onload = (ev) => { user.avatarImage = ev.target.result; avatarEditOpen = true; renderProfile(); };
     reader.readAsDataURL(file);
   });
 
@@ -100,7 +97,6 @@ function renderTheme() {
   document.getElementById("themeDarkBtn").className = theme === "dark" ? "btn-primary" : "btn-outline";
   document.getElementById("themeLightBtn").className = theme === "light" ? "btn-primary" : "btn-outline";
 }
-
 function bindTheme() {
   document.getElementById("themeDarkBtn").addEventListener("click", () => { cbSetTheme("dark"); renderTheme(); });
   document.getElementById("themeLightBtn").addEventListener("click", () => { cbSetTheme("light"); renderTheme(); });
@@ -121,22 +117,22 @@ async function loadCoinsForAlerts() {
 }
 
 function bindAlerts() {
-  document.getElementById("addAlertBtn").addEventListener("click", () => {
+  document.getElementById("addAlertBtn").addEventListener("click", async () => {
     const coinId = document.getElementById("alertCoin").value;
     const direction = document.getElementById("alertDirection").value;
     const price = parseFloat(document.getElementById("alertPrice").value);
     if (!coinId || !price || price <= 0) return alert("Choose a coin and enter a valid target price.");
     const coin = allCoins.find(c => c.id === coinId);
-    cbAddAlert(user.email, { coinId, coinName: coin?.name || coinId, coinSymbol: coin?.symbol || "", direction, targetPrice: price });
+    await cbAddAlert(user.email, { coinId, coinName: coin?.name || coinId, coinSymbol: coin?.symbol || "", direction, targetPrice: price });
     document.getElementById("alertPrice").value = "";
-    renderAlerts();
+    await renderAlerts();
     showToast("Alert created");
   });
 }
 
-function renderAlerts() {
+async function renderAlerts() {
   const list = document.getElementById("alertList");
-  const alerts = cbGetAlerts(user.email);
+  const alerts = await cbGetAlerts(user.email);
   if (!alerts.length) { list.innerHTML = `<div class="empty"><span class="emoji">🔕</span>No alerts yet.</div>`; return; }
   list.innerHTML = alerts.map(a => `
     <div class="alert-row">
@@ -148,13 +144,16 @@ function renderAlerts() {
       <button class="remove-btn" data-id="${a.id}">Remove</button>
     </div>`).join("");
   list.querySelectorAll(".remove-btn").forEach(btn => {
-    btn.addEventListener("click", () => { cbRemoveAlert(user.email, btn.dataset.id); renderAlerts(); });
+    btn.addEventListener("click", async () => {
+      await cbRemoveAlert(user.email, btn.dataset.id);
+      await renderAlerts();
+    });
   });
 }
 
 function bindResetWallet() {
-  document.getElementById("resetWalletBtn").addEventListener("click", () => {
-    if (cbResetWallet(user.email)) {
+  document.getElementById("resetWalletBtn").addEventListener("click", async () => {
+    if (await cbResetWallet(user.email)) {
       showToast("Wallet reset to $5,000 + starter coins");
       setTimeout(() => location.href = "wallet.html", 900);
     }
@@ -162,8 +161,8 @@ function bindResetWallet() {
 }
 
 function bindDeleteAccount() {
-  document.getElementById("deleteAccountBtn").addEventListener("click", () => {
-    if (cbDeleteAccount(user.email)) location.href = "index.html";
+  document.getElementById("deleteAccountBtn").addEventListener("click", async () => {
+    if (await cbDeleteAccount(user.email)) location.href = "index.html";
   });
 }
 
