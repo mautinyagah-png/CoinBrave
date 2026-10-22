@@ -1,7 +1,5 @@
 // ============================================================
-// CoinBrave auth.js — SUPABASE VERSION
-// Public API identical to the localStorage version.
-// All functions are async (return Promises).
+// CoinBrave auth.js — SUPABASE VERSION (self-bootstrap)
 // ============================================================
 
 // ---- auto-inject head + footer ----
@@ -17,6 +15,33 @@
   }
 })();
 
+// ---- self-bootstrap Supabase ----
+const CB_SUPABASE_URL = "https://yycwsvtxtrqzpjdpnjjb.supabase.co";
+const CB_SUPABASE_ANON_KEY = "sb_publishable_b4keaWfThlv9vgxQcMTyGA_e-nwKLRd";
+
+async function cbSB() {
+  if (window.sb) return window.sb;
+  if (window._cbSupabaseReady) return window._cbSupabaseReady;
+  window._cbSupabaseReady = (async () => {
+    await new Promise((resolve) => {
+      if (window.supabase && window.supabase.createClient) return resolve();
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js";
+      s.onload = resolve;
+      s.onerror = () => { console.error("Supabase SDK load failed"); resolve(); };
+      document.head.appendChild(s);
+    });
+    if (!window.sb && window.supabase) {
+      window.sb = window.supabase.createClient(CB_SUPABASE_URL, CB_SUPABASE_ANON_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+    }
+    return window.sb;
+  })();
+  return window._cbSupabaseReady;
+}
+
+// ---- constants ----
 const CB_REDIRECT_KEY = "cb_redirect";
 const CB_THEME_KEY = "cb_theme";
 const CB_RECENT_KEY = "cb_recent";
@@ -30,25 +55,27 @@ let _cbUserCacheTime = 0;
 const CB_USER_CACHE_MS = 5000;
 
 async function cbGetSession() {
-  if (!window.sb) return null;
-  const { data } = await window.sb.auth.getSession();
+  const sb = await cbSB();
+  if (!sb) return null;
+  const { data } = await sb.auth.getSession();
   return data.session;
 }
-async function cbSetSession() { /* handled by Supabase internally */ }
+async function cbSetSession() { /* handled by Supabase */ }
 async function cbClearSession() {
   _cbUserCache = null;
-  if (window.sb) await window.sb.auth.signOut();
+  const sb = await cbSB();
+  if (sb) await sb.auth.signOut();
 }
 
 async function cbCurrentUser() {
-  if (!window.sb) return null;
+  const sb = await cbSB();
+  if (!sb) return null;
   if (_cbUserCache && Date.now() - _cbUserCacheTime < CB_USER_CACHE_MS) return _cbUserCache;
 
-  const { data: { user } } = await window.sb.auth.getUser();
+  const { data: { user } } = await sb.auth.getUser();
   if (!user) { _cbUserCache = null; return null; }
 
-  const { data: profile, error } = await window.sb
-    .from("profiles").select("*").eq("id", user.id).maybeSingle();
+  const { data: profile, error } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
   if (error) console.warn("profile fetch error", error);
 
   _cbUserCache = {
@@ -68,25 +95,25 @@ function cbInvalidateUserCache() { _cbUserCache = null; _cbUserCacheTime = 0; }
 
 // ---- Wallet ----
 async function cbGetWallet(email) {
-  if (!window.sb) return null;
+  const sb = await cbSB();
+  if (!sb) return null;
   const user = await cbCurrentUser();
   if (!user) return null;
-  const { data, error } = await window.sb
-    .from("wallets").select("*").eq("user_id", user.id).maybeSingle();
+  const { data, error } = await sb.from("wallets").select("*").eq("user_id", user.id).maybeSingle();
   if (error) { console.warn("wallet fetch error", error); return null; }
   return data;
 }
 async function cbSaveWallet(email, wallet) {
-  if (!window.sb) return;
+  const sb = await cbSB();
+  if (!sb) return;
   const user = await cbCurrentUser();
   if (!user) return;
   const payload = { user_id: user.id, usd: wallet.usd || 0, updated_at: new Date().toISOString() };
-  // Copy any coin keys (id from CoinGecko) into the row
   const reserved = ["usd", "user_id", "updated_at"];
   Object.keys(wallet).forEach(k => {
     if (!reserved.includes(k) && typeof wallet[k] === "number") payload[k] = wallet[k];
   });
-  await window.sb.from("wallets").update(payload).eq("user_id", user.id);
+  await sb.from("wallets").update(payload).eq("user_id", user.id);
 }
 
 function cbDefaultWallet() {
@@ -96,16 +123,11 @@ function cbDefaultAvgPrices() {
   return { bitcoin: 82497, ethereum: 2430, solana: 104.55, dogecoin: 0.08, cardano: 0.218, chainlink: 12.17 };
 }
 
-// ---- Avg prices (per-user, stored in localStorage for simplicity — not synced) ----
-function cbGetAvgPrices(email) {
-  try { return JSON.parse(localStorage.getItem("cb_avg_" + email) || "{}"); } catch { return {}; }
-}
+// ---- Avg prices (local cache) ----
+function cbGetAvgPrices(email) { try { return JSON.parse(localStorage.getItem("cb_avg_" + email) || "{}"); } catch { return {}; } }
 function cbSaveAvgPrices(email, obj) { localStorage.setItem("cb_avg_" + email, JSON.stringify(obj)); }
 function cbUpdateAvgOnBuy(email, coinId, qty, price) {
   const avg = cbGetAvgPrices(email);
-  const oldQty = 0; // recomputed from wallet
-  // Note: this is approximate — we don't track per-coin qty history locally now.
-  // Just blend toward the current price.
   const prev = avg[coinId] || price;
   avg[coinId] = (prev + price) / 2;
   cbSaveAvgPrices(email, avg);
@@ -131,7 +153,7 @@ function cbPasswordStrength(pw) {
   return { level: "strong", label: "Strong", score: 3 };
 }
 
-// ---- Login rate limiting (local, still useful) ----
+// ---- Rate limiting ----
 function cbGetLoginAttempts() { try { return JSON.parse(localStorage.getItem(CB_LOGIN_ATTEMPTS) || "{}"); } catch { return {}; } }
 function cbRecordFailedAttempt(email) {
   const attempts = cbGetLoginAttempts();
@@ -160,7 +182,7 @@ function cbIsLockedOut(email) {
   return 0;
 }
 
-// ---- Favorites (local, per-device — fine for demo) ----
+// ---- Favorites ----
 function cbGetFavorites() { try { return JSON.parse(localStorage.getItem("cb_favorites") || "[]"); } catch { return []; } }
 function cbSaveFavorites(l) { localStorage.setItem("cb_favorites", JSON.stringify(l)); }
 function cbToggleFavorite(id) {
@@ -211,11 +233,11 @@ function cbSparkline(prices, width, height, up) {
 
 // ---- Transactions ----
 async function cbGetTransactions(email) {
-  if (!window.sb) return [];
+  const sb = await cbSB();
+  if (!sb) return [];
   const user = await cbCurrentUser();
   if (!user) return [];
-  const { data, error } = await window.sb
-    .from("transactions").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+  const { data, error } = await sb.from("transactions").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
   if (error) { console.warn("transactions fetch error", error); return []; }
   return (data || []).map(t => ({
     id: t.id, type: t.type, coinId: t.coin_id, coinName: t.coin_name, coinSymbol: t.coin_symbol,
@@ -223,10 +245,11 @@ async function cbGetTransactions(email) {
   }));
 }
 async function cbAddTransaction(email, tx) {
-  if (!window.sb) return;
+  const sb = await cbSB();
+  if (!sb) return;
   const user = await cbCurrentUser();
   if (!user) return;
-  await window.sb.from("transactions").insert({
+  await sb.from("transactions").insert({
     user_id: user.id, type: tx.type, coin_id: tx.coinId, coin_name: tx.coinName,
     coin_symbol: tx.coinSymbol, coin_image: tx.coinImage, amount: tx.amount,
     price: tx.price, total: tx.total, fee: tx.fee
@@ -235,11 +258,11 @@ async function cbAddTransaction(email, tx) {
 
 // ---- Alerts ----
 async function cbGetAlerts(email) {
-  if (!window.sb) return [];
+  const sb = await cbSB();
+  if (!sb) return [];
   const user = await cbCurrentUser();
   if (!user) return [];
-  const { data, error } = await window.sb
-    .from("alerts").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+  const { data, error } = await sb.from("alerts").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
   if (error) { console.warn("alerts fetch error", error); return []; }
   return (data || []).map(a => ({
     id: a.id, coinId: a.coin_id, coinName: a.coin_name, coinSymbol: a.coin_symbol,
@@ -247,55 +270,59 @@ async function cbGetAlerts(email) {
   }));
 }
 async function cbAddAlert(email, alert) {
-  if (!window.sb) return;
+  const sb = await cbSB();
+  if (!sb) return;
   const user = await cbCurrentUser();
   if (!user) return;
-  await window.sb.from("alerts").insert({
+  await sb.from("alerts").insert({
     user_id: user.id, coin_id: alert.coinId, coin_name: alert.coinName,
     coin_symbol: alert.coinSymbol, direction: alert.direction, target_price: alert.targetPrice
   });
 }
 async function cbRemoveAlert(email, id) {
-  if (!window.sb) return;
+  const sb = await cbSB();
+  if (!sb) return;
   const user = await cbCurrentUser();
   if (!user) return;
-  await window.sb.from("alerts").delete().eq("id", id).eq("user_id", user.id);
+  await sb.from("alerts").delete().eq("id", id).eq("user_id", user.id);
 }
 
 // ---- Notifications ----
 async function cbGetNotifications(email) {
-  if (!window.sb) return [];
+  const sb = await cbSB();
+  if (!sb) return [];
   const user = await cbCurrentUser();
   if (!user) return [];
-  const { data, error } = await window.sb
-    .from("notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+  const { data, error } = await sb.from("notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
   if (error) { console.warn("notifications fetch error", error); return []; }
   return (data || []).map(n => ({
     id: n.id, type: n.type, title: n.title, body: n.body, read: n.read, timestamp: n.created_at
   }));
 }
 async function cbAddNotification(email, notif) {
-  if (!window.sb) return;
+  const sb = await cbSB();
+  if (!sb) return;
   const user = await cbCurrentUser();
   if (!user) return;
-  await window.sb.from("notifications").insert({
+  await sb.from("notifications").insert({
     user_id: user.id, type: notif.type, title: notif.title, body: notif.body
   });
   cbUpdateBellBadge();
 }
 async function cbMarkNotificationsRead(email) {
-  if (!window.sb) return;
+  const sb = await cbSB();
+  if (!sb) return;
   const user = await cbCurrentUser();
   if (!user) return;
-  await window.sb.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
+  await sb.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
   cbUpdateBellBadge();
 }
 async function cbUnreadNotificationsCount(email) {
-  if (!window.sb) return 0;
+  const sb = await cbSB();
+  if (!sb) return 0;
   const user = await cbCurrentUser();
   if (!user) return 0;
-  const { count } = await window.sb
-    .from("notifications").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false);
+  const { count } = await sb.from("notifications").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false);
   return count || 0;
 }
 async function cbUpdateBellBadge() {
@@ -309,6 +336,8 @@ async function cbUpdateBellBadge() {
 }
 
 async function cbCheckAlerts(coins) {
+  const sb = await cbSB();
+  if (!sb) return;
   const user = await cbCurrentUser();
   if (!user || !Array.isArray(coins)) return;
   const alerts = await cbGetAlerts(user.email);
@@ -320,7 +349,7 @@ async function cbCheckAlerts(coins) {
     const hit = (a.direction === "above" && coin.current_price >= a.targetPrice) ||
                 (a.direction === "below" && coin.current_price <= a.targetPrice);
     if (hit) {
-      await window.sb.from("alerts").update({ triggered: true }).eq("id", a.id);
+      await sb.from("alerts").update({ triggered: true }).eq("id", a.id);
       await cbAddNotification(user.email, {
         type: "alert",
         title: `${coin.name} ${a.direction === "above" ? "hit" : "dropped to"} ${cbFormatPrice(a.targetPrice)}`,
@@ -330,7 +359,7 @@ async function cbCheckAlerts(coins) {
   }
 }
 
-// ---- Portfolio history (local only) ----
+// ---- History (local) ----
 function cbGetHistory(email) { try { return JSON.parse(localStorage.getItem("cb_history_" + email) || "[]"); } catch { return []; } }
 function cbSaveHistory(email, l) { localStorage.setItem("cb_history_" + email, JSON.stringify(l)); }
 function cbSnapshotPortfolio(email, totalUsd) {
@@ -349,7 +378,7 @@ function cbGetTheme() { return localStorage.getItem(CB_THEME_KEY) || "dark"; }
 function cbSetTheme(t) { localStorage.setItem(CB_THEME_KEY, t); if (t === "light") document.body.classList.add("light"); else document.body.classList.remove("light"); }
 function cbApplyTheme() { cbSetTheme(cbGetTheme()); }
 
-// ---- Auth guards ----
+// ---- Guards ----
 async function cbRequireAuth() {
   const user = await cbCurrentUser();
   if (!user) {
@@ -375,28 +404,26 @@ async function cbDeleteAccount(email) {
   if (!confirm("Delete your account PERMANENTLY?\n\nAll your wallet, trades, alerts, and settings will be erased forever. This cannot be undone.")) return false;
   const typed = prompt('Type DELETE (all caps) to confirm:');
   if (typed !== "DELETE") { alert("Cancelled. Account not deleted."); return false; }
-  // Delete DB rows (auth.js can only delete own profile via RLS cascade; the auth.users row needs a server function — for demo, sign out only)
-  if (window.sb) {
+  const sb = await cbSB();
+  if (sb) {
     const user = await cbCurrentUser();
-    if (user) {
-      await window.sb.from("profiles").delete().eq("id", user.id);
-    }
+    if (user) await sb.from("profiles").delete().eq("id", user.id);
     await cbClearSession();
   }
   return true;
 }
 
-// ---- Reset wallet ----
 async function cbResetWallet(email) {
   if (!confirm("Reset your demo wallet?\n\nYour cash returns to $5,000 and your starter coins are restored. All transactions are cleared. Your account and alerts stay.")) return false;
-  if (!window.sb) return false;
+  const sb = await cbSB();
+  if (!sb) return false;
   const user = await cbCurrentUser();
   if (!user) return false;
   const w = cbDefaultWallet();
   const payload = { user_id: user.id, updated_at: new Date().toISOString() };
   Object.keys(w).forEach(k => payload[k] = w[k]);
-  await window.sb.from("wallets").update(payload).eq("user_id", user.id);
-  await window.sb.from("transactions").delete().eq("user_id", user.id);
+  await sb.from("wallets").update(payload).eq("user_id", user.id);
+  await sb.from("transactions").delete().eq("user_id", user.id);
   await cbAddTransaction(email, { type: "deposit", total: 5000, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
   await cbAddNotification(email, { type: "deposit", title: "Wallet reset", body: "Demo wallet restored to $5,000 + starter coins." });
   return true;
@@ -404,33 +431,31 @@ async function cbResetWallet(email) {
 
 // ---- Referral ----
 async function cbValidateReferralCode(code) {
-  if (!code || !window.sb) return null;
+  const sb = await cbSB();
+  if (!code || !sb) return null;
   const normalized = code.trim().toUpperCase();
   if (!normalized) return null;
-  const { data, error } = await window.sb.from("profiles").select("id, name, user_id").eq("user_id", normalized).maybeSingle();
+  const { data, error } = await sb.from("profiles").select("id, name, user_id").eq("user_id", normalized).maybeSingle();
   if (error || !data) return null;
-  return { email: data.id, name: data.name }; // return profile.id as email for compat
+  return { email: data.id, name: data.name };
 }
-async function cbApplyReferral(newUserEmail, referrerEmail) {
-  // Note: referrerEmail here is actually the referrer's profile.id (uuid).
-  // Bump both wallets by $5.
-  if (!window.sb) return;
+async function cbApplyReferral(newUserEmail, referrerId) {
+  const sb = await cbSB();
+  if (!sb) return;
   const bonus = 5;
-  // New user
   const me = await cbCurrentUser();
   if (me) {
     const w = await cbGetWallet(me.email);
-    if (w) await window.sb.from("wallets").update({ usd: (w.usd || 0) + bonus }).eq("user_id", me.id);
+    if (w) await sb.from("wallets").update({ usd: (w.usd || 0) + bonus }).eq("user_id", me.id);
     await cbAddTransaction(me.email, { type: "deposit", total: bonus, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
     await cbAddNotification(me.email, { type: "reward", title: `Welcome bonus +$${bonus}`, body: "Referral bonus applied." });
   }
-  // Referrer
-  if (referrerEmail) {
-    const { data: ref } = await window.sb.from("wallets").select("*").eq("user_id", referrerEmail).maybeSingle();
+  if (referrerId) {
+    const { data: ref } = await sb.from("wallets").select("*").eq("user_id", referrerId).maybeSingle();
     if (ref) {
-      await window.sb.from("wallets").update({ usd: (ref.usd || 0) + bonus }).eq("user_id", referrerEmail);
-      await window.sb.from("notifications").insert({
-        user_id: referrerEmail, type: "reward", title: `Referral bonus +$${bonus}`, body: "Someone signed up with your code."
+      await sb.from("wallets").update({ usd: (ref.usd || 0) + bonus }).eq("user_id", referrerId);
+      await sb.from("notifications").insert({
+        user_id: referrerId, type: "reward", title: `Referral bonus +$${bonus}`, body: "Someone signed up with your code."
       });
     }
   }
@@ -486,8 +511,9 @@ async function cbGetMarketForFunds() {
   return _cbMarketCache;
 }
 
-// ---- Funds modal (deposit/withdraw) — reuses the same UI but writes to Supabase ----
 async function cbOpenFundsModal(mode, onSuccess) {
+  const sb = await cbSB();
+  if (!sb) return;
   const user = await cbCurrentUser();
   if (!user) { location.href = "signup.html"; return; }
   let existing = document.getElementById("cbFundsModal");
@@ -568,20 +594,18 @@ async function cbOpenFundsModal(mode, onSuccess) {
     const amt = parseFloat(amtEl.value);
     const showErr = (m) => { errEl.textContent = m; errEl.classList.add("show"); };
     if (!amt || amt <= 0 || isNaN(amt)) return showErr("Enter a valid amount.");
-
     const w = await cbGetWallet(user.email) || {};
 
     if (mode === "deposit") {
       if (asset === "usd") {
-        await window.sb.from("wallets").update({ usd: (w.usd || 0) + amt }).eq("user_id", user.id);
+        await sb.from("wallets").update({ usd: (w.usd || 0) + amt }).eq("user_id", user.id);
         await cbAddTransaction(user.email, { type: "deposit", total: amt, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
         await cbAddNotification(user.email, { type: "deposit", title: `Deposited $${amt.toFixed(2)}`, body: "Added to cash." });
       } else {
         const coin = market.find(c => c.id === asset);
         if (!coin) return showErr("Asset unavailable.");
         const newQty = (w[asset] || 0) + amt;
-        const updates = { [asset]: newQty };
-        await window.sb.from("wallets").update(updates).eq("user_id", user.id);
+        await sb.from("wallets").update({ [asset]: newQty }).eq("user_id", user.id);
         cbUpdateAvgOnBuy(user.email, asset, amt, coin.current_price);
         const usd = amt * coin.current_price;
         await cbAddTransaction(user.email, { type: "deposit", total: usd, amount: amt, price: coin.current_price, coinId: asset, coinName: coin.name, coinSymbol: coin.symbol, coinImage: coin.image });
@@ -590,7 +614,7 @@ async function cbOpenFundsModal(mode, onSuccess) {
     } else {
       if (asset === "usd") {
         if (amt > (w.usd || 0)) return showErr(`Insufficient. You have $${(w.usd || 0).toFixed(2)}.`);
-        await window.sb.from("wallets").update({ usd: (w.usd || 0) - amt }).eq("user_id", user.id);
+        await sb.from("wallets").update({ usd: (w.usd || 0) - amt }).eq("user_id", user.id);
         await cbAddTransaction(user.email, { type: "withdraw", total: amt, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
         await cbAddNotification(user.email, { type: "withdraw", title: `Withdrew $${amt.toFixed(2)}`, body: "Removed from cash." });
       } else {
@@ -599,7 +623,7 @@ async function cbOpenFundsModal(mode, onSuccess) {
         const have = w[asset] || 0;
         if (amt > have + 1e-9) return showErr(`Insufficient. You have ${have} ${coin.symbol.toUpperCase()}.`);
         const newQty = Math.max(0, have - amt);
-        await window.sb.from("wallets").update({ [asset]: newQty }).eq("user_id", user.id);
+        await sb.from("wallets").update({ [asset]: newQty }).eq("user_id", user.id);
         cbUpdateAvgOnSell(user.email, asset);
         const usd = amt * coin.current_price;
         await cbAddTransaction(user.email, { type: "withdraw", total: usd, amount: amt, price: coin.current_price, coinId: asset, coinName: coin.name, coinSymbol: coin.symbol, coinImage: coin.image });
@@ -612,7 +636,7 @@ async function cbOpenFundsModal(mode, onSuccess) {
   });
 }
 
-// ---- Nav render (async-safe) ----
+// ---- Nav ----
 async function cbRenderNav() {
   cbApplyTheme();
   cbRenderFooter();
@@ -704,8 +728,6 @@ function cbRenderProfileDrawer(user) {
         <a href="signup.html" class="drawer-item"><span class="drawer-icon">✨</span><span>Sign Up</span></a>
       </nav>`;
   } else {
-    const cash = 0; // shown on wallet page instead of drawer now
-    const unreadCount = 0;
     drawer.innerHTML = `
       <div class="drawer-header">
         <div class="drawer-avatar">${cbRenderAvatarHTML(user, 48)}</div>
@@ -815,7 +837,7 @@ async function cbAIAnswerFor(topic) {
     case "deposit": return `<p><a href="wallet.html">Assets</a> → <b>Deposit</b> or <b>Withdraw</b>. Pick USD or any coin, enter amount, confirm.</p>`;
     case "alerts": return `<p><a href="settings.html">Settings</a> → <b>Price Alerts</b> → pick coin, target, direction.</p>`;
     case "rewards": return `<p><a href="rewards.html">Rewards Hub</a> → claim $5 daily.</p>`;
-    case "pl": return `<p><b>P/L</b> = Profit/Loss. We track your average buy price per coin. Value − Cost = P/L.</p>`;
+    case "pl": return `<p><b>P/L</b> = Profit/Loss. Value − Cost = P/L.</p>`;
     case "install": return `<p>On mobile, tap Share → <b>Add to Home Screen</b>.</p>`;
     case "support": return `<p>Email <a href="mailto:support@coinbrave.demo">support@coinbrave.demo</a>.</p>`;
     default: return "";
