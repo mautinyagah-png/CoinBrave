@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notifications — CoinBrave</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo">
+      <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 1.8 3.6 5.5v6.2c0 5 3.5 9.1 8.4 10.5 4.9-1.4 8.4-5.5 8.4-10.5V5.5L12 1.8z" fill="#f0b90b"/>
+        <path d="M12 5.5 6.6 8v3.7c0 3.1 2.1 5.7 5.4 6.6 3.3-.9 5.4-3.5 5.4-6.6V8L12 5.5z" fill="#0b0e11"/>
+        <text x="12" y="15.3" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="6.2" font-weight="800" fill="#f0b90b">B</text>
+      </svg>
+      <span>CoinBrave</span>
+    </div>
+    <nav class="nav"></nav>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Notifications</h2>
+        <button id="markReadBtn" class="btn-outline" style="padding:6px 12px;font-size:0.82rem">Mark all read</button>
+      </div>
+      <div id="notifList"><div class="loading">Loading…</div></div>
+    </section>
+  </main>
+
+  <script src="auth.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      cbRenderNav();
+      if (!cbRequireAuth()) return;
+      const user = cbCurrentUser();
+      render(user);
+      document.getElementById("markReadBtn").addEventListener("click", () => {
+        cbMarkNotificationsRead(user.email);
+        render(user);
+      });
+    });
+
+    function render(user) {
+      const el = document.getElementById("notifList");
+      const list = cbGetNotifications(user.email);
+      if (!list.length) {
+        el.innerHTML = `<div class="empty"><span class="emoji">🔔</span>No notifications yet.</div>`;
+        return;
+      }
+      el.innerHTML = list.map(n => `
+        <div class="notif-row ${n.read ? "" : "unread"}">
+          <div class="notif-title">${!n.read ? `<span class="notif-dot"></span>` : ""}${n.title}</div>
+          ${n.body ? `<div class="notif-body">${n.body}</div>` : ""}
+          <div class="notif-time">${new Date(n.timestamp).toLocaleString()}</div>
+        </div>`).join("");
+    }
+  </script>
+</body>
+</html>
