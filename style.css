@@ -19,7 +19,16 @@ body {
   top: 0;
   z-index: 10;
 }
-.logo { font-size: 1.4rem; font-weight: 700; color: #f0b90b; }
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #f0b90b;
+}
+
 .nav { display: flex; gap: 24px; align-items: center; }
 .nav a { color: #eaecef; text-decoration: none; font-size: 0.95rem; }
 .nav a:hover, .nav a.active { color: #f0b90b; }
@@ -74,10 +83,26 @@ body {
 .up { color: #0ecb81; }
 .down { color: #f6465d; }
 
+/* Loading + error states */
+.loading {
+  color: #848e9c;
+  padding: 16px 8px;
+  font-size: 0.95rem;
+}
+.error-box {
+  color: #f6465d;
+  background: rgba(246, 70, 93, 0.08);
+  border: 1px solid rgba(246, 70, 93, 0.3);
+  padding: 14px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
 /* Mobile */
 @media (max-width: 600px) {
   .coin-row { grid-template-columns: 32px 1fr 1fr; font-size: 0.85rem; }
-  .coin-row .price { display: none; } /* hide price on tiny screens, keep % */
+  .coin-row .price { display: none; }
   .topbar { padding: 12px 16px; }
   .nav { gap: 12px; }
 }
