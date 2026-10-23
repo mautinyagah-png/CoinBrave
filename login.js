@@ -1,6 +1,13 @@
 document.addEventListener("DOMContentLoaded", async () => {
   await cbRenderNav();
 
+  // If already logged in, instantly send them to home
+  const user = await cbCurrentUser();
+  if (user) { 
+    location.href = "index.html"; 
+    return; 
+  }
+
   const form = document.getElementById("loginForm");
   const errEl = document.getElementById("err");
   const btn = document.getElementById("submitBtn");
