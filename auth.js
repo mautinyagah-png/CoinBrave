@@ -1,5 +1,5 @@
 // ============================================================
-// CoinBrave auth.js — FINAL COMPLETE FIX
+// CoinBrave auth.js — FINAL FIX
 // ============================================================
 
 async function cbSB() {
@@ -17,7 +17,6 @@ async function cbSB() {
     });
     
     if (!window.sb && window.supabase) {
-      // HARDCODED URL to guarantee it is never empty
       window.sb = window.supabase.createClient(
         "https://yycwsvtxtrqzpjdpnjjb.supabase.co", 
         "sb_publishable_b4keaWfThlv9vgxQcMTyGA_e-nwKLRd",
@@ -29,7 +28,6 @@ async function cbSB() {
   return window._cbSupabaseReady;
 }
 
-// Auto-inject head tags
 (function cbInject() {
   if (typeof document === 'undefined') return;
   const add = (tag, attrs) => { const el = document.createElement(tag); Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v)); document.head.appendChild(el); };
@@ -67,9 +65,7 @@ async function cbCurrentUser() {
       avatarImage: profile?.avatar_image || null,
       createdAt: user.created_at
     };
-  } catch (e) {
-    return null;
-  }
+  } catch (e) { return null; }
 }
 
 async function cbClearSession() {
@@ -186,7 +182,13 @@ function cbSetTheme(t) { localStorage.setItem(CB_THEME_KEY, t); if (t === "light
 function cbApplyTheme() { cbSetTheme(cbGetTheme()); }
 
 async function cbRequireAuth() {
-  const user = await cbCurrentUser();
+  // Give Supabase 1 second to load the token before kicking them out
+  let user = await cbCurrentUser();
+  if (!user) {
+    await new Promise(r => setTimeout(r, 1000));
+    user = await cbCurrentUser();
+  }
+  
   if (!user) { 
     localStorage.setItem(CB_REDIRECT_KEY, location.href); 
     location.href = "login.html"; 
@@ -203,8 +205,6 @@ function cbRenderAvatarHTML(user, size) {
 }
 
 async function cbLogout() { if (confirm("Log out of CoinBrave?")) { await cbClearSession(); location.href = "index.html"; } }
-
-// --- MISSING FUNCTIONS RESTORED ---
 
 function cbEnablePullToRefresh(onRefresh) {
   let startY = 0, pulling = false, indicator = null;
