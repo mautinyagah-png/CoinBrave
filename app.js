@@ -24,9 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function bindAddFunds() {
-  document.getElementById("addFundsBtn").addEventListener("click", () => {
-    location.href = "wallet.html?deposit=1";
-  });
+  document.getElementById("addFundsBtn").addEventListener("click", () => { location.href = "wallet.html?deposit=1"; });
 }
 
 function renderSkeletons() {
@@ -36,13 +34,7 @@ function renderSkeletons() {
   document.getElementById("discoveryList").innerHTML = Array(3).fill(row).join("");
 }
 
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
-
+function getGreeting() { const h = new Date().getHours(); if (h < 12) return "Good morning"; if (h < 18) return "Good afternoon"; return "Good evening"; }
 function renderGreeting(user) {
   const wrap = document.getElementById("greetingWrap");
   if (!user) { wrap.style.display = "none"; return; }
@@ -55,308 +47,121 @@ function renderGreeting(user) {
 
 async function loadHomeData() {
   try {
-    let res = await fetch(URL);
-    if (!res.ok) res = await fetch(PROXY + encodeURIComponent(URL));
+    let res = await fetch(URL); if (!res.ok) res = await fetch(PROXY + encodeURIComponent(URL));
     if (!res.ok) throw new Error(`API error ${res.status}`);
     allCoins = await res.json();
   } catch (err) {
     console.error(err);
-    const msg = `<div class="error-box">⚠️ Could not load markets: <b>${err.message}</b></div>`;
-    document.getElementById("top5").innerHTML = msg;
+    document.getElementById("top5").innerHTML = `<div class="error-box">⚠️ Could not load markets: <b>${err.message}</b></div>`;
     document.getElementById("discoveryList").innerHTML = "";
     return;
   }
   cbCheckAlerts(allCoins);
-  renderTop5();
-  renderDiscovery();
-  renderRecent();
+  cbCheckLimitOrders(allCoins); // Check limit orders
+  renderTop5(); renderDiscovery(); renderRecent();
   await renderBalanceCard();
 }
 
 function renderRecent() {
-  const panel = document.getElementById("recentPanel");
-  const row = document.getElementById("recentRow");
-  const user = cbCurrentUser();
-  if (!user) { panel.style.display = "none"; return; }
-  const recent = cbGetRecent();
-  if (!recent.length) { panel.style.display = "none"; return; }
+  const panel = document.getElementById("recentPanel"), row = document.getElementById("recentRow");
+  const user = cbCurrentUser(); if (!user) { panel.style.display = "none"; return; }
+  const recent = cbGetRecent(); if (!recent.length) { panel.style.display = "none"; return; }
   panel.style.display = "";
-  row.innerHTML = recent.map(c => {
-    const change = c.change ?? 0;
-    const cls = change >= 0 ? "up" : "down";
-    const arrow = change >= 0 ? "▲" : "▼";
-    return `<div class="recent-card" data-id="${c.id}">
-      <div class="r-head"><img src="${c.image}" alt="${c.symbol}" /><span class="r-sym">${c.symbol.toUpperCase()}</span></div>
-      <div class="r-price">${cbFormatPrice(c.price)}</div>
-      <div class="r-chg ${cls}">${arrow} ${Math.abs(change).toFixed(2)}%</div>
-    </div>`;
-  }).join("");
-  row.querySelectorAll(".recent-card").forEach(card => {
-    card.addEventListener("click", () => { location.href = `coin.html?coin=${card.dataset.id}`; });
-  });
+  row.innerHTML = recent.map(c => `<div class="recent-card" data-id="${c.id}"><div class="r-head"><img src="${c.image}" alt="${c.symbol}" /><span class="r-sym">${c.symbol.toUpperCase()}</span></div><div class="r-price">${cbFormatPrice(c.price)}</div><div class="r-chg ${c.change >= 0 ? "up" : "down"}">${c.change >= 0 ? "▲" : "▼"} ${Math.abs(c.change).toFixed(2)}%</div></div>`).join("");
+  row.querySelectorAll(".recent-card").forEach(card => card.addEventListener("click", () => { location.href = `coin.html?coin=${card.dataset.id}`; }));
 }
 
-function sampleSpark(prices, count) {
-  if (!prices || prices.length === 0) return [];
-  const n = count || 30;
-  const step = Math.max(1, Math.floor(prices.length / n));
-  return prices.filter((_, i) => i % step === 0);
-}
-
-function renderTop5() {
-  const el = document.getElementById("top5");
-  el.innerHTML = allCoins.slice(0, 5).map(coinRowHTML).join("");
-  bindCoinRows(el);
-}
-
+function sampleSpark(prices, count) { if (!prices || prices.length === 0) return []; const n = count || 30; const step = Math.max(1, Math.floor(prices.length / n)); return prices.filter((_, i) => i % step === 0); }
+function renderTop5() { const el = document.getElementById("top5"); el.innerHTML = allCoins.slice(0, 5).map(coinRowHTML).join(""); bindCoinRows(el); }
 function renderDiscovery() {
-  const el = document.getElementById("discoveryList");
-  let list = [];
-  if (currentTab === "favorites") {
-    const favs = cbGetFavorites();
-    list = allCoins.filter(c => favs.includes(c.id));
-    if (list.length === 0) {
-      el.innerHTML = `<div class="empty"><span class="emoji">⭐</span>No favorites yet.<br><span class="muted" style="font-size:0.85rem">Tap the ★ on any coin.</span></div>`;
-      return;
-    }
-  } else if (currentTab === "gainers") {
-    list = [...allCoins].sort((a, b) => (b.price_change_percentage_24h ?? 0) - (a.price_change_percentage_24h ?? 0)).slice(0, 10);
-  } else {
-    list = [...allCoins].sort((a, b) => (a.price_change_percentage_24h ?? 0) - (b.price_change_percentage_24h ?? 0)).slice(0, 10);
-  }
-  el.innerHTML = list.map(coinRowHTML).join("");
-  bindCoinRows(el);
+  const el = document.getElementById("discoveryList"); let list = [];
+  if (currentTab === "favorites") { const favs = cbGetFavorites(); list = allCoins.filter(c => favs.includes(c.id)); if (list.length === 0) { el.innerHTML = `<div class="empty"><span class="emoji">⭐</span>No favorites yet.<br><span class="muted" style="font-size:0.85rem">Tap the ★ on any coin.</span></div>`; return; } }
+  else if (currentTab === "gainers") list = [...allCoins].sort((a, b) => (b.price_change_percentage_24h ?? 0) - (a.price_change_percentage_24h ?? 0)).slice(0, 10);
+  else list = [...allCoins].sort((a, b) => (a.price_change_percentage_24h ?? 0) - (b.price_change_percentage_24h ?? 0)).slice(0, 10);
+  el.innerHTML = list.map(coinRowHTML).join(""); bindCoinRows(el);
 }
 
 function coinRowHTML(c) {
-  const change = c.price_change_percentage_24h ?? 0;
-  const cls = change >= 0 ? "up" : "down";
-  const arrow = change >= 0 ? "▲" : "▼";
-  const fav = cbGetFavorites().includes(c.id);
-  const sampled = sampleSpark(c.sparkline_in_7d?.price || [], 30);
-  const spark = cbSparkline(sampled, 60, 24, change >= 0);
-  return `
-    <div class="coin-row clickable" data-id="${c.id}">
-      <button class="fav-btn ${fav ? 'active' : ''}" data-fav="${c.id}">★</button>
-      <img src="${c.image}" alt="${c.symbol}" />
-      <span class="name">${c.name} <span class="muted">(${c.symbol.toUpperCase()})</span></span>
-      <span class="sparkline-cell">${spark}</span>
-      <span class="price">${cbFormatPrice(c.current_price)}</span>
-      <span class="${cls}">${arrow} ${Math.abs(change).toFixed(2)}%</span>
-    </div>`;
+  const change = c.price_change_percentage_24h ?? 0; const cls = change >= 0 ? "up" : "down"; const arrow = change >= 0 ? "▲" : "▼";
+  const fav = cbGetFavorites().includes(c.id); const sampled = sampleSpark(c.sparkline_in_7d?.price || [], 30); const spark = cbSparkline(sampled, 60, 24, change >= 0);
+  return `<div class="coin-row clickable" data-id="${c.id}"><button class="fav-btn ${fav ? 'active' : ''}" data-fav="${c.id}">★</button><img src="${c.image}" alt="${c.symbol}" /><span class="name">${c.name} <span class="muted">(${c.symbol.toUpperCase()})</span></span><span class="sparkline-cell">${spark}</span><span class="price">${cbFormatPrice(c.current_price)}</span><span class="${cls}">${arrow} ${Math.abs(change).toFixed(2)}%</span></div>`;
 }
 
 function bindCoinRows(container) {
   container.querySelectorAll(".fav-btn").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); cbToggleFavorite(btn.dataset.fav); renderDiscovery(); renderTop5(); }));
-  container.querySelectorAll(".coin-row.clickable").forEach(row => row.addEventListener("click", () => {
-    const coin = allCoins.find(c => c.id === row.dataset.id);
-    if (coin) cbPushRecent(coin);
-    location.href = `coin.html?coin=${row.dataset.id}`;
-  }));
+  container.querySelectorAll(".coin-row.clickable").forEach(row => row.addEventListener("click", () => { const coin = allCoins.find(c => c.id === row.dataset.id); if (coin) cbPushRecent(coin); location.href = `coin.html?coin=${row.dataset.id}`; }));
 }
 
 async function renderBalanceCard() {
   try {
-    const user = cbCurrentUser();
-    const hero = document.getElementById("landingHero");
-    const card = document.getElementById("balanceCard");
-    renderGreeting(user);
-    if (!user) { hero.style.display = ""; card.style.display = "none"; return; }
+    const user = cbCurrentUser(); const hero = document.getElementById("landingHero"); const card = document.getElementById("balanceCard");
+    renderGreeting(user); if (!user) { hero.style.display = ""; card.style.display = "none"; return; }
     hero.style.display = "none"; card.style.display = "";
-
-    const wallet = cbGetWallet(user.email) || { usd: 0 };
-    const avgPrices = cbGetAvgPrices(user.email);
-    const cash = wallet.usd || 0;
-    let total = cash, change24 = 0, totalCost = 0;
-    const holdings = [];
-
+    const wallet = cbGetWallet(user.email) || { usd: 0 }; const avgPrices = cbGetAvgPrices(user.email);
+    const cash = wallet.usd || 0; let total = cash, change24 = 0, totalCost = 0; const holdings = [];
     for (const [id, amount] of Object.entries(wallet)) {
       if (id === "usd" || id === "user_id" || id === "updated_at" || !amount) continue;
-      const coin = allCoins.find(c => c.id === id);
-      if (!coin) continue;
-      const usd = amount * coin.current_price;
-      total += usd;
-      change24 += usd * ((coin.price_change_percentage_24h ?? 0) / 100);
-      totalCost += amount * (avgPrices[id] || 0);
-      holdings.push({ coin, amount });
+      const coin = allCoins.find(c => c.id === id); if (!coin) continue;
+      const usd = amount * coin.current_price; total += usd; change24 += usd * ((coin.price_change_percentage_24h ?? 0) / 100); totalCost += amount * (avgPrices[id] || 0); holdings.push({ coin, amount });
     }
-
     cbSnapshotPortfolio(user.email, total);
-
     document.getElementById("balanceValue").textContent = "$" + total.toLocaleString(undefined, { maximumFractionDigits: 2 });
-    const prev = total - change24;
-    const pct = prev > 0 ? (change24 / prev) * 100 : 0;
-    const cls = change24 >= 0 ? "up" : "down";
-    const arrow = change24 >= 0 ? "▲" : "▼";
-    const sign = change24 >= 0 ? "+" : "-";
+    const prev = total - change24; const pct = prev > 0 ? (change24 / prev) * 100 : 0; const cls = change24 >= 0 ? "up" : "down"; const arrow = change24 >= 0 ? "▲" : "▼"; const sign = change24 >= 0 ? "+" : "-";
     document.getElementById("balanceChange").innerHTML = `<span class="${cls}">${arrow} ${sign}$${Math.abs(change24).toFixed(2)} (${sign}${Math.abs(pct).toFixed(2)}%)</span> <span class="muted">· 24h</span>`;
-
     const plEl = document.getElementById("balancePL");
-    if (totalCost > 0) {
-      const pl = total - cash - totalCost;
-      const plPct = (pl / totalCost) * 100;
-      const plCls = pl >= 0 ? "up" : "down";
-      plEl.innerHTML = `<span class="muted">P/L:</span> <span class="${plCls}">${cbFormatSigned(pl)} (${pl >= 0 ? "+" : ""}${plPct.toFixed(2)}%)</span>`;
-    } else plEl.innerHTML = "";
-
+    if (totalCost > 0) { const pl = total - cash - totalCost; const plPct = (pl / totalCost) * 100; const plCls = pl >= 0 ? "up" : "down"; plEl.innerHTML = `<span class="muted">P/L:</span> <span class="${plCls}">${cbFormatSigned(pl)} (${pl >= 0 ? "+" : ""}${plPct.toFixed(2)}%)</span>`; } else plEl.innerHTML = "";
     await drawChart(user.email, holdings, cash, chartRange);
-  } catch (e) {
-    console.error("Balance render failed", e);
-    document.getElementById("landingHero").style.display = "";
-  }
+  } catch (e) { console.error(e); document.getElementById("landingHero").style.display = ""; }
 }
 
 async function drawChart(email, holdings, cash, days) {
-  const chartEl = document.getElementById("balanceChart");
-  const tooltip = document.getElementById("chartTooltip");
-  
-  if (holdings.length === 0) {
-    chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Buy some coins to track growth</text>`;
-    tooltip.classList.remove("show");
-    return;
-  }
-
+  const chartEl = document.getElementById("balanceChart"); const tooltip = document.getElementById("chartTooltip");
+  if (holdings.length === 0) { chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Buy some coins to track growth</text>`; tooltip.classList.remove("show"); return; }
   chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Loading chart…</text>`;
-
   try {
-    // 1. Fetch historical prices for the top 5 holdings
     const sorted = [...holdings].sort((a, b) => b.amount * b.coin.current_price - a.amount * a.coin.current_price).slice(0, 5);
     const series = await Promise.all(sorted.map(h => fetchHistory(h.coin.id, days)));
-    const minLen = Math.min(...series.map(s => s.prices.length));
-    if (minLen < 2) throw new Error("Not enough data points");
-
-    // 2. Build the realistic historical line based on current cash + historical coin prices
-    const dates = series[0].prices.map(p => p[0]);
-    const points = [];
-    
-    for (let i = 0; i < minLen; i++) {
-      let val = cash; // Use the current cash balance
-      for (let j = 0; j < sorted.length; j++) {
-        val += sorted[j].amount * series[j].prices[i][1];
-      }
-      points.push({ date: dates[i], value: val });
-    }
-
-    // 3. Sample down if there are too many points (e.g., for 1Y)
-    const step = Math.max(1, Math.floor(points.length / 100));
-    const sampledPoints = points.filter((_, i) => i % step === 0);
-    chartData = sampledPoints;
-
-    const values = sampledPoints.map(p => p.value);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    
-    if (max === min) {
-      chartEl.innerHTML = `<line x1="0" y1="70" x2="400" y2="70" stroke="var(--text-muted)" stroke-width="2" stroke-dasharray="4 4"/>`;
-      return;
-    }
-
-    const range = max - min;
-    const W = 400, H = 140;
-    const scaled = sampledPoints.map((p, i) => {
-      const x = (i / (sampledPoints.length - 1)) * W;
-      const y = H - ((p.value - min) / range) * (H - 20) - 10;
-      p._x = x; p._y = y;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-
-    const up = sampledPoints[sampledPoints.length - 1].value >= sampledPoints[0].value;
-    const color = up ? "var(--up)" : "var(--down)";
-    
-    chartEl.innerHTML = `
-      <defs>
-        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <polygon points="0,${H} ${scaled} ${W},${H}" fill="url(#chartGrad)"/>
-      <polyline points="${scaled}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-      <line id="chartHoverLine" x1="0" y1="0" x2="0" y2="${H}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
-      <circle id="chartHoverDot" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
-    `;
-
+    const minLen = Math.min(...series.map(s => s.prices.length)); if (minLen < 2) throw new Error("Not enough data points");
+    const dates = series[0].prices.map(p => p[0]); const points = [];
+    for (let i = 0; i < minLen; i++) { let val = cash; for (let j = 0; j < sorted.length; j++) val += sorted[j].amount * series[j].prices[i][1]; points.push({ date: dates[i], value: val }); }
+    const step = Math.max(1, Math.floor(points.length / 100)); const sampledPoints = points.filter((_, i) => i % step === 0); chartData = sampledPoints;
+    const values = sampledPoints.map(p => p.value); const min = Math.min(...values); const max = Math.max(...values);
+    if (max === min) { chartEl.innerHTML = `<line x1="0" y1="70" x2="400" y2="70" stroke="var(--text-muted)" stroke-width="2" stroke-dasharray="4 4"/>`; return; }
+    const range = max - min; const W = 400, H = 140;
+    const scaled = sampledPoints.map((p, i) => { const x = (i / (sampledPoints.length - 1)) * W; const y = H - ((p.value - min) / range) * (H - 20) - 10; p._x = x; p._y = y; return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
+    const up = sampledPoints[sampledPoints.length - 1].value >= sampledPoints[0].value; const color = up ? "var(--up)" : "var(--down)";
+    chartEl.innerHTML = `<defs><linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity="0.35"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><polygon points="0,${H} ${scaled} ${W},${H}" fill="url(#chartGrad)"/><polyline points="${scaled}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/><line id="chartHoverLine" x1="0" y1="0" x2="0" y2="${H}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/><circle id="chartHoverDot" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>`;
     chartEl.onmousemove = (e) => {
-      const rect = chartEl.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * W;
-      let nearest = chartData[0];
-      for (const p of chartData) { if (Math.abs(p._x - x) < Math.abs(nearest._x - x)) nearest = p; }
-      if (!nearest) return;
-      const line = document.getElementById("chartHoverLine");
-      const dot = document.getElementById("chartHoverDot");
+      const rect = chartEl.getBoundingClientRect(); const x = ((e.clientX - rect.left) / rect.width) * W; let nearest = chartData[0];
+      for (const p of chartData) { if (Math.abs(p._x - x) < Math.abs(nearest._x - x)) nearest = p; } if (!nearest) return;
+      const line = document.getElementById("chartHoverLine"), dot = document.getElementById("chartHoverDot");
       if (line) { line.setAttribute("x1", nearest._x); line.setAttribute("x2", nearest._x); line.setAttribute("opacity", "1"); }
       if (dot) { dot.setAttribute("cx", nearest._x); dot.setAttribute("cy", nearest._y); dot.setAttribute("opacity", "1"); }
       const dateStr = new Date(nearest.date).toLocaleString(undefined, { month: 'short', day: 'numeric' });
       tooltip.innerHTML = `<div class="tt-date">${dateStr}</div><div class="tt-value">$${nearest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>`;
-      const wrap = chartEl.parentElement;
-      const tRect = wrap.getBoundingClientRect();
-      let left = e.clientX - tRect.left + 12;
-      if (left + 140 > tRect.width) left = e.clientX - tRect.left - 150;
-      tooltip.style.left = left + "px";
-      tooltip.style.top = (e.clientY - tRect.top - 40) + "px";
-      tooltip.classList.add("show");
+      const wrap = chartEl.parentElement; const tRect = wrap.getBoundingClientRect(); let left = e.clientX - tRect.left + 12;
+      if (left + 140 > tRect.width) left = e.clientX - tRect.left - 150; tooltip.style.left = left + "px"; tooltip.style.top = (e.clientY - tRect.top - 40) + "px"; tooltip.classList.add("show");
     };
-    chartEl.onmouseleave = () => {
-      tooltip.classList.remove("show");
-      const line = document.getElementById("chartHoverLine");
-      const dot = document.getElementById("chartHoverDot");
-      if (line) line.setAttribute("opacity", "0");
-      if (dot) dot.setAttribute("opacity", "0");
-    };
-  } catch (err) {
-    console.error("Chart error:", err);
-    chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--down)" font-size="12">Chart unavailable</text>`;
-  }
+    chartEl.onmouseleave = () => { tooltip.classList.remove("show"); const line = document.getElementById("chartHoverLine"), dot = document.getElementById("chartHoverDot"); if (line) line.setAttribute("opacity", "0"); if (dot) dot.setAttribute("opacity", "0"); };
+  } catch (err) { console.error(err); chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--down)" font-size="12">Chart unavailable</text>`; }
 }
 
 async function fetchHistory(coinId, days) {
-  const cacheKey = `cb_chart_${coinId}_${days}`;
-  const cached = localStorage.getItem(cacheKey);
+  const cacheKey = `cb_chart_${coinId}_${days}`; const cached = localStorage.getItem(cacheKey);
   if (cached) { try { const p = JSON.parse(cached); if (Date.now() - p.ts < 3600000) return p.data; } catch {} }
   const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}`;
-  let res = await fetch(url);
-  if (!res.ok) res = await fetch(PROXY + encodeURIComponent(url));
-  if (!res.ok) throw new Error(`History API error ${res.status}`);
-  const data = await res.json();
-  try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data })); } catch {}
-  return data;
+  let res = await fetch(url); if (!res.ok) res = await fetch(PROXY + encodeURIComponent(url)); if (!res.ok) throw new Error(`History API error ${res.status}`);
+  const data = await res.json(); try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data })); } catch {} return data;
 }
 
-function bindBalanceToggle() {
-  const btn = document.getElementById("balanceToggle");
-  const chart = document.getElementById("chartWrap");
-  if (!btn || !chart) return;
-  btn.addEventListener("click", () => { chart.classList.toggle("hidden"); btn.classList.toggle("collapsed"); });
-}
-
+function bindBalanceToggle() { const btn = document.getElementById("balanceToggle"), chart = document.getElementById("chartWrap"); if (!btn || !chart) return; btn.addEventListener("click", () => { chart.classList.toggle("hidden"); btn.classList.toggle("collapsed"); }); }
 function bindRangeTabs() {
   document.querySelectorAll(".range-tabs button").forEach(btn => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".range-tabs button").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      chartRange = parseInt(btn.dataset.range, 10);
+      document.querySelectorAll(".range-tabs button").forEach(b => b.classList.remove("active")); btn.classList.add("active"); chartRange = parseInt(btn.dataset.range, 10);
       const user = cbCurrentUser();
-      if (user) {
-        const wallet = cbGetWallet(user.email) || { usd: 0 };
-        const holdings = [];
-        for (const [id, amount] of Object.entries(wallet)) {
-          if (id === "usd" || !amount) continue;
-          const coin = allCoins.find(c => c.id === id);
-          if (coin) holdings.push({ coin, amount });
-        }
-        drawChart(user.email, holdings, wallet.usd || 0, chartRange);
-      }
+      if (user) { const wallet = cbGetWallet(user.email) || { usd: 0 }; const holdings = []; for (const [id, amount] of Object.entries(wallet)) { if (id === "usd" || !amount) continue; const coin = allCoins.find(c => c.id === id); if (coin) holdings.push({ coin, amount }); } drawChart(user.email, holdings, wallet.usd || 0, chartRange); }
     });
   });
 }
-
-function bindDiscoveryTabs() {
-  document.querySelectorAll(".discovery-tabs button").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".discovery-tabs button").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      currentTab = btn.dataset.tab;
-      renderDiscovery();
-    });
-  });
-}
+function bindDiscoveryTabs() { document.querySelectorAll(".discovery-tabs button").forEach(btn => { btn.addEventListener("click", () => { document.querySelectorAll(".discovery-tabs button").forEach(b => b.classList.remove("active")); btn.classList.add("active"); currentTab = btn.dataset.tab; renderDiscovery(); }); }); }
