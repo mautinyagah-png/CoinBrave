@@ -13,6 +13,25 @@ document.addEventListener("DOMContentLoaded", () => {
       render();
     });
   });
+  
+  document.getElementById("exportCsvBtn").addEventListener("click", () => {
+    const list = cbGetTransactions(user.email);
+    if (!list.length) return alert("No transactions to export.");
+    
+    let csv = "Date,Type,Coin,Amount,Price,Total,Fee\n";
+    list.forEach(tx => {
+      const d = new Date(tx.timestamp).toISOString();
+      csv += `${d},${tx.type},${tx.coinSymbol ? tx.coinSymbol.toUpperCase() : 'USD'},${tx.amount || ''},${tx.price || ''},${tx.total || ''},${tx.fee || 0}\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('href', url);
+    a.setAttribute('download', `coinbrave_transactions_${new Date().toISOString().slice(0,10)}.csv`);
+    a.click();
+  });
+
   render();
 });
 
