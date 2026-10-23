@@ -9,11 +9,7 @@
 <body>
   <header class="topbar">
     <div class="logo">
-      <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 1.8 3.6 5.5v6.2c0 5 3.5 9.1 8.4 10.5 4.9-1.4 8.4-5.5 8.4-10.5V5.5L12 1.8z" fill="#f0b90b"/>
-        <path d="M12 5.5 6.6 8v3.7c0 3.1 2.1 5.7 5.4 6.6 3.3-.9 5.4-3.5 5.4-6.6V8L12 5.5z" fill="#0b0e11"/>
-        <text x="12" y="15.3" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="6.2" font-weight="800" fill="#f0b90b">B</text>
-      </svg>
+      <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8 3.6 5.5v6.2c0 5 3.5 9.1 8.4 10.5 4.9-1.4 8.4-5.5 8.4-10.5V5.5L12 1.8z" fill="#f0b90b"/><path d="M12 5.5 6.6 8v3.7c0 3.1 2.1 5.7 5.4 6.6 3.3-.9 5.4-3.5 5.4-6.6V8L12 5.5z" fill="#0b0e11"/><text x="12" y="15.3" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="6.2" font-weight="800" fill="#f0b90b">B</text></svg>
       <span>CoinBrave</span>
     </div>
     <nav class="nav"></nav>
@@ -23,34 +19,31 @@
     <section class="panel">
       <h2>Profile</h2>
       <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap">
-        <div style="position:relative">
-          <div class="avatar-preview" id="avatarPreview"></div>
-        </div>
+        <div style="position:relative"><div class="avatar-preview" id="avatarPreview"></div></div>
         <div style="flex:1;min-width:220px">
-          <div class="form-group">
-            <label>Display name</label>
-            <input id="nameInput" type="text" />
-          </div>
-          <div class="form-group">
-            <label>User ID (read-only)</label>
-            <input id="userIdInput" type="text" readonly />
-          </div>
+          <div class="form-group"><label>Display name</label><input id="nameInput" type="text" /></div>
+          <div class="form-group"><label>User ID (read-only)</label><input id="userIdInput" type="text" readonly /></div>
         </div>
       </div>
-
       <div class="avatar-edit-area" id="avatarEditArea">
-        <div class="form-group">
-          <label>Choose an emoji</label>
-          <div class="emoji-grid" id="emojiGrid"></div>
-        </div>
-        <div class="form-group">
-          <label>Or upload a picture (max 200KB)</label>
-          <input id="avatarUpload" type="file" accept="image/*" />
-          <button id="clearImageBtn" class="btn-outline" style="margin-top:8px;display:none">Use emoji instead</button>
-        </div>
+        <div class="form-group"><label>Choose an emoji</label><div class="emoji-grid" id="emojiGrid"></div></div>
+        <div class="form-group"><label>Or upload a picture (max 200KB)</label><input id="avatarUpload" type="file" accept="image/*" /><button id="clearImageBtn" class="btn-outline" style="margin-top:8px;display:none">Use emoji instead</button></div>
       </div>
-
       <button id="saveProfileBtn" class="btn-primary" style="margin-top:16px">Save Profile</button>
+    </section>
+
+    <section class="panel">
+      <h2>Security</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg);padding:16px;border-radius:8px;border:1px solid var(--border-soft)">
+        <div>
+          <div style="font-weight:600;font-size:0.95rem">Two-Factor Authentication (2FA)</div>
+          <div class="muted" style="font-size:0.8rem;margin-top:2px">Protect your account with an authenticator app.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="twoFactorToggle" />
+          <span class="slider"></span>
+        </label>
+      </div>
     </section>
 
     <section class="panel">
@@ -63,22 +56,10 @@
 
     <section class="panel">
       <h2>Price Alerts</h2>
-      <div class="form-group">
-        <label>Coin</label>
-        <select id="alertCoin"></select>
-      </div>
+      <div class="form-group"><label>Coin</label><select id="alertCoin"></select></div>
       <div class="btn-row" style="margin-bottom:16px">
-        <div class="form-group" style="margin-bottom:0">
-          <label>Direction</label>
-          <select id="alertDirection">
-            <option value="above">Goes above</option>
-            <option value="below">Goes below</option>
-          </select>
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label>Target (USD)</label>
-          <input id="alertPrice" type="number" min="0" step="0.01" placeholder="85000" />
-        </div>
+        <div class="form-group" style="margin-bottom:0"><label>Direction</label><select id="alertDirection"><option value="above">Goes above</option><option value="below">Goes below</option></select></div>
+        <div class="form-group" style="margin-bottom:0"><label>Target (USD)</label><input id="alertPrice" type="number" min="0" step="0.01" placeholder="85000" /></div>
       </div>
       <button id="addAlertBtn" class="btn-primary">Add Alert</button>
       <div id="alertList" style="margin-top:16px"></div>
