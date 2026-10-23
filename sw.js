@@ -1,4 +1,4 @@
-const CACHE = 'coinbrave-v2';
+const CACHE = 'coinbrave-v3';
 
 self.addEventListener('install', () => { self.skipWaiting(); });
 
@@ -14,6 +14,7 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   if (url.hostname !== location.hostname) return;
+  
   e.respondWith(
     fetch(e.request)
       .then(res => {
@@ -23,6 +24,13 @@ self.addEventListener('fetch', (e) => {
         }
         return res;
       })
-      .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
+      .catch(() => {
+        return caches.match(e.request).then(r => {
+          if (r) return r;
+          // ONLY serve index.html as a fallback for navigation (page loads)
+          // NEVER serve index.html for JS or CSS files
+          if (e.request.mode === 'navigate') return caches.match('./index.html');
+        });
+      })
   );
 });
