@@ -19,13 +19,20 @@
     <nav class="nav"></nav>
   </header>
 
-  <main class="container">
+  <main class="container" style="display:grid; grid-template-columns: 1fr 300px; gap:20px; align-items:start;">
     <section class="panel">
       <div class="trade-header">
         <h2>Trade</h2>
         <input id="searchInput" class="search-bar" type="search" placeholder="Search coin or symbol…" autocomplete="off" />
       </div>
       <div id="tradeList" class="coin-list"><div class="loading">Loading markets…</div></div>
+    </section>
+
+    <section class="panel" style="position:sticky; top:80px;">
+      <div class="panel-header"><h2>Recent Trades</h2></div>
+      <div id="recentTradesList" style="display:flex; flex-direction:column; gap:6px; font-size:0.82rem; font-family:monospace;">
+        <div class="muted">Waiting for trades...</div>
+      </div>
     </section>
   </main>
 
@@ -44,6 +51,11 @@
           </div>
         </div>
 
+        <div class="discovery-tabs" id="orderTypeRow" style="margin-bottom:12px">
+          <button data-type="market" class="active" style="flex:1;text-align:center">Market Order</button>
+          <button data-type="limit" style="flex:1;text-align:center">Limit Order</button>
+        </div>
+
         <div class="preset-row" id="presetRow">
           <button data-pct="25">25%</button>
           <button data-pct="50">50%</button>
@@ -54,6 +66,12 @@
           <label>Amount (<span id="modalSymbol"></span>)</label>
           <input id="modalAmount" type="number" step="any" min="0" placeholder="0.00" />
         </div>
+
+        <div class="form-group" id="limitPriceGroup" style="display:none">
+          <label>Target Price (USD)</label>
+          <input id="modalLimitPrice" type="number" step="any" min="0" placeholder="0.00" />
+        </div>
+
         <div class="form-group">
           <label>Total (USD)</label>
           <input id="modalTotal" type="text" readonly value="$0.00" />
