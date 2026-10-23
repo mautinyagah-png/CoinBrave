@@ -18,7 +18,6 @@ document.addEventListener("DOMContentLoaded", () => {
   renderSkeletons();
   loadHomeData();
 
-  // Refresh data when you come back to this tab
   window.addEventListener('focus', () => {
     if (allCoins.length > 0) renderBalanceCard();
   });
@@ -182,7 +181,6 @@ async function renderBalanceCard() {
       holdings.push({ coin, amount });
     }
 
-    // Snapshot the new total (in case we just made a trade/withdrawal)
     cbSnapshotPortfolio(user.email, total);
 
     document.getElementById("balanceValue").textContent = "$" + total.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -212,107 +210,103 @@ async function drawChart(email, holdings, cash, days) {
   const chartEl = document.getElementById("balanceChart");
   const tooltip = document.getElementById("chartTooltip");
   
-  // 1. Get the user's actual historical snapshots
-  const history = cbGetHistory(email);
-  
-  // 2. If they have less than 2 snapshots, fall back to generating from live data
-  let points = [];
-  if (history.length >= 2) {
-    points = history.map(h => ({ date: new Date(h.date).getTime(), value: h.value }));
-  } else if (holdings.length > 0) {
-    // Generate a simple 7-day line from current holdings if no history exists
-    chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Loading chart…</text>`;
-    try {
-      const sorted = [...holdings].sort((a, b) => b.amount * b.coin.current_price - a.amount * a.coin.current_price).slice(0, 5);
-      const series = await Promise.all(sorted.map(h => fetchHistory(h.coin.id, days)));
-      const minLen = Math.min(...series.map(s => s.prices.length));
-      if (minLen < 2) throw new Error("Not enough data points");
-      const dates = series[0].prices.map(p => p[0]);
-      for (let i = 0; i < minLen; i++) {
-        let val = cash;
-        for (let j = 0; j < sorted.length; j++) val += sorted[j].amount * series[j].prices[i][1];
-        points.push({ date: dates[i], value: val });
-      }
-    } catch (err) {
-      chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--down)" font-size="12">Chart unavailable</text>`;
-      return;
-    }
-  } else {
+  if (holdings.length === 0) {
     chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Buy some coins to track growth</text>`;
     tooltip.classList.remove("show");
     return;
   }
 
-  // 3. Filter by days
-  const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
-  points = points.filter(p => p.date >= cutoff);
-  if (points.length < 2) {
-    chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Not enough data for this range</text>`;
-    return;
+  chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Loading chart…</text>`;
+
+  try {
+    // 1. Fetch historical prices for the top 5 holdings
+    const sorted = [...holdings].sort((a, b) => b.amount * b.coin.current_price - a.amount * a.coin.current_price).slice(0, 5);
+    const series = await Promise.all(sorted.map(h => fetchHistory(h.coin.id, days)));
+    const minLen = Math.min(...series.map(s => s.prices.length));
+    if (minLen < 2) throw new Error("Not enough data points");
+
+    // 2. Build the realistic historical line based on current cash + historical coin prices
+    const dates = series[0].prices.map(p => p[0]);
+    const points = [];
+    
+    for (let i = 0; i < minLen; i++) {
+      let val = cash; // Use the current cash balance
+      for (let j = 0; j < sorted.length; j++) {
+        val += sorted[j].amount * series[j].prices[i][1];
+      }
+      points.push({ date: dates[i], value: val });
+    }
+
+    // 3. Sample down if there are too many points (e.g., for 1Y)
+    const step = Math.max(1, Math.floor(points.length / 100));
+    const sampledPoints = points.filter((_, i) => i % step === 0);
+    chartData = sampledPoints;
+
+    const values = sampledPoints.map(p => p.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    
+    if (max === min) {
+      chartEl.innerHTML = `<line x1="0" y1="70" x2="400" y2="70" stroke="var(--text-muted)" stroke-width="2" stroke-dasharray="4 4"/>`;
+      return;
+    }
+
+    const range = max - min;
+    const W = 400, H = 140;
+    const scaled = sampledPoints.map((p, i) => {
+      const x = (i / (sampledPoints.length - 1)) * W;
+      const y = H - ((p.value - min) / range) * (H - 20) - 10;
+      p._x = x; p._y = y;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+
+    const up = sampledPoints[sampledPoints.length - 1].value >= sampledPoints[0].value;
+    const color = up ? "var(--up)" : "var(--down)";
+    
+    chartEl.innerHTML = `
+      <defs>
+        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon points="0,${H} ${scaled} ${W},${H}" fill="url(#chartGrad)"/>
+      <polyline points="${scaled}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <line id="chartHoverLine" x1="0" y1="0" x2="0" y2="${H}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
+      <circle id="chartHoverDot" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
+    `;
+
+    chartEl.onmousemove = (e) => {
+      const rect = chartEl.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * W;
+      let nearest = chartData[0];
+      for (const p of chartData) { if (Math.abs(p._x - x) < Math.abs(nearest._x - x)) nearest = p; }
+      if (!nearest) return;
+      const line = document.getElementById("chartHoverLine");
+      const dot = document.getElementById("chartHoverDot");
+      if (line) { line.setAttribute("x1", nearest._x); line.setAttribute("x2", nearest._x); line.setAttribute("opacity", "1"); }
+      if (dot) { dot.setAttribute("cx", nearest._x); dot.setAttribute("cy", nearest._y); dot.setAttribute("opacity", "1"); }
+      const dateStr = new Date(nearest.date).toLocaleString(undefined, { month: 'short', day: 'numeric' });
+      tooltip.innerHTML = `<div class="tt-date">${dateStr}</div><div class="tt-value">$${nearest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>`;
+      const wrap = chartEl.parentElement;
+      const tRect = wrap.getBoundingClientRect();
+      let left = e.clientX - tRect.left + 12;
+      if (left + 140 > tRect.width) left = e.clientX - tRect.left - 150;
+      tooltip.style.left = left + "px";
+      tooltip.style.top = (e.clientY - tRect.top - 40) + "px";
+      tooltip.classList.add("show");
+    };
+    chartEl.onmouseleave = () => {
+      tooltip.classList.remove("show");
+      const line = document.getElementById("chartHoverLine");
+      const dot = document.getElementById("chartHoverDot");
+      if (line) line.setAttribute("opacity", "0");
+      if (dot) dot.setAttribute("opacity", "0");
+    };
+  } catch (err) {
+    console.error("Chart error:", err);
+    chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--down)" font-size="12">Chart unavailable</text>`;
   }
-
-  chartData = points;
-  const values = points.map(p => p.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  
-  if (max === min) {
-    chartEl.innerHTML = `<line x1="0" y1="70" x2="400" y2="70" stroke="var(--text-muted)" stroke-width="2" stroke-dasharray="4 4"/>`;
-    return;
-  }
-
-  const range = max - min;
-  const W = 400, H = 140;
-  const scaled = points.map((p, i) => {
-    const x = (i / (points.length - 1)) * W;
-    const y = H - ((p.value - min) / range) * (H - 20) - 10;
-    p._x = x; p._y = y;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-
-  const up = points[points.length - 1].value >= points[0].value;
-  const color = up ? "var(--up)" : "var(--down)";
-  
-  chartEl.innerHTML = `
-    <defs>
-      <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
-        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    <polygon points="0,${H} ${scaled} ${W},${H}" fill="url(#chartGrad)"/>
-    <polyline points="${scaled}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-    <line id="chartHoverLine" x1="0" y1="0" x2="0" y2="${H}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
-    <circle id="chartHoverDot" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
-  `;
-
-  chartEl.onmousemove = (e) => {
-    const rect = chartEl.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * W;
-    let nearest = chartData[0];
-    for (const p of chartData) { if (Math.abs(p._x - x) < Math.abs(nearest._x - x)) nearest = p; }
-    if (!nearest) return;
-    const line = document.getElementById("chartHoverLine");
-    const dot = document.getElementById("chartHoverDot");
-    if (line) { line.setAttribute("x1", nearest._x); line.setAttribute("x2", nearest._x); line.setAttribute("opacity", "1"); }
-    if (dot) { dot.setAttribute("cx", nearest._x); dot.setAttribute("cy", nearest._y); dot.setAttribute("opacity", "1"); }
-    const dateStr = new Date(nearest.date).toLocaleString(undefined, { month: 'short', day: 'numeric' });
-    tooltip.innerHTML = `<div class="tt-date">${dateStr}</div><div class="tt-value">$${nearest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>`;
-    const wrap = chartEl.parentElement;
-    const tRect = wrap.getBoundingClientRect();
-    let left = e.clientX - tRect.left + 12;
-    if (left + 140 > tRect.width) left = e.clientX - tRect.left - 150;
-    tooltip.style.left = left + "px";
-    tooltip.style.top = (e.clientY - tRect.top - 40) + "px";
-    tooltip.classList.add("show");
-  };
-  chartEl.onmouseleave = () => {
-    tooltip.classList.remove("show");
-    const line = document.getElementById("chartHoverLine");
-    const dot = document.getElementById("chartHoverDot");
-    if (line) line.setAttribute("opacity", "0");
-    if (dot) dot.setAttribute("opacity", "0");
-  };
 }
 
 async function fetchHistory(coinId, days) {
