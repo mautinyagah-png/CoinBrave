@@ -1,8 +1,7 @@
 // ============================================================
-// CoinBrave auth.js — SUPABASE VERSION (Bulletproof UI)
+// CoinBrave auth.js — SUPABASE VERSION (Bulletproof URL)
 // ============================================================
 
-// ---- auto-inject head + footer ----
 (function cbInject() {
   if (typeof document === 'undefined') return;
   const add = (tag, attrs) => { const el = document.createElement(tag); Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v)); document.head.appendChild(el); };
@@ -14,10 +13,6 @@
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
 })();
-
-// ---- self-bootstrap Supabase ----
-const CB_SUPABASE_URL = "https://yycwsvtxtrqzpjdpnjjb.supabase.co";
-const CB_SUPABASE_ANON_KEY = "sb_publishable_b4keaWfThlv9vgxQcMTyGA_e-nwKLRd";
 
 async function cbSB() {
   if (window.sb) return window.sb;
@@ -32,52 +27,46 @@ async function cbSB() {
       document.head.appendChild(s);
     });
     if (!window.sb && window.supabase) {
-      window.sb = window.supabase.createClient(CB_SUPABASE_URL, CB_SUPABASE_ANON_KEY, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-      });
+      // DIRECT HARDCODE TO PREVENT "MALFORMED URL" ERRORS
+      window.sb = window.supabase.createClient(
+        "https://yycwsvtxtrqzpjdpnjjb.supabase.co",
+        "sb_publishable_b4keaWfThlv9vgxQcMTyGA_e-nwKLRd",
+        { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
+      );
     }
     return window.sb;
   })();
   return window._cbSupabaseReady;
 }
 
-// ---- constants ----
 const CB_REDIRECT_KEY = "cb_redirect";
 const CB_THEME_KEY = "cb_theme";
 const CB_RECENT_KEY = "cb_recent";
 const CB_LOGIN_ATTEMPTS = "cb_login_attempts";
 const CB_EMOJIS = ["🦁","🐂","🐻","🦊","🐺","🐯","🦄","🐳","🦈","🐬","🦅","🐉","🚀","💎","🌙","⭐","🔥","🎯","🎨","🧠"];
 
-// ---- Session / user ----
 let _cbUserCache = null;
 let _cbUserCacheTime = 0;
 const CB_USER_CACHE_MS = 5000;
 
 async function cbGetSession() {
-  const sb = await cbSB();
-  if (!sb) return null;
-  const { data } = await sb.auth.getSession();
-  return data.session;
+  const sb = await cbSB(); if (!sb) return null;
+  const { data } = await sb.auth.getSession(); return data.session;
 }
 async function cbSetSession() { }
 async function cbClearSession() {
   _cbUserCache = null;
-  const sb = await cbSB();
-  if (sb) await sb.auth.signOut();
+  const sb = await cbSB(); if (sb) await sb.auth.signOut();
 }
 
 async function cbCurrentUser() {
   try {
-    const sb = await cbSB();
-    if (!sb) return null;
+    const sb = await cbSB(); if (!sb) return null;
     if (_cbUserCache && Date.now() - _cbUserCacheTime < CB_USER_CACHE_MS) return _cbUserCache;
-
-    // getSession is instant (from localStorage). No network hang.
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { _cbUserCache = null; return null; }
     const user = session.user;
 
-    // Try to fetch profile, but don't hang if network is slow
     let profile = null;
     try {
       const { data } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
@@ -95,91 +84,52 @@ async function cbCurrentUser() {
     };
     _cbUserCacheTime = Date.now();
     return _cbUserCache;
-  } catch (err) {
-    console.error("cbCurrentUser failed:", err);
-    return null;
-  }
+  } catch (err) { return null; }
 }
 
 function cbInvalidateUserCache() { _cbUserCache = null; _cbUserCacheTime = 0; }
 
-// ---- Wallet ----
 async function cbGetWallet(email) {
-  const sb = await cbSB();
-  if (!sb) return null;
-  const user = await cbCurrentUser();
-  if (!user) return null;
-  const { data, error } = await sb.from("wallets").select("*").eq("user_id", user.id).maybeSingle();
-  if (error) { console.warn("wallet fetch error", error); return null; }
+  const sb = await cbSB(); if (!sb) return null;
+  const user = await cbCurrentUser(); if (!user) return null;
+  const { data } = await sb.from("wallets").select("*").eq("user_id", user.id).maybeSingle();
   return data;
 }
 async function cbSaveWallet(email, wallet) {
-  const sb = await cbSB();
-  if (!sb) return;
-  const user = await cbCurrentUser();
-  if (!user) return;
+  const sb = await cbSB(); if (!sb) return;
+  const user = await cbCurrentUser(); if (!user) return;
   const payload = { user_id: user.id, usd: wallet.usd || 0, updated_at: new Date().toISOString() };
   const reserved = ["usd", "user_id", "updated_at"];
-  Object.keys(wallet).forEach(k => {
-    if (!reserved.includes(k) && typeof wallet[k] === "number") payload[k] = wallet[k];
-  });
+  Object.keys(wallet).forEach(k => { if (!reserved.includes(k) && typeof wallet[k] === "number") payload[k] = wallet[k]; });
   await sb.from("wallets").update(payload).eq("user_id", user.id);
 }
 
 function cbDefaultWallet() { return { usd: 5000, bitcoin: 0.03, ethereum: 0.5, solana: 5, dogecoin: 5000, cardano: 1000, chainlink: 10 }; }
 function cbDefaultAvgPrices() { return { bitcoin: 82497, ethereum: 2430, solana: 104.55, dogecoin: 0.08, cardano: 0.218, chainlink: 12.17 }; }
 
-// ---- Avg prices ----
 function cbGetAvgPrices(email) { try { return JSON.parse(localStorage.getItem("cb_avg_" + email) || "{}"); } catch { return {}; } }
 function cbSaveAvgPrices(email, obj) { localStorage.setItem("cb_avg_" + email, JSON.stringify(obj)); }
-function cbUpdateAvgOnBuy(email, coinId, qty, price) {
-  const avg = cbGetAvgPrices(email);
-  const prev = avg[coinId] || price;
-  avg[coinId] = (prev + price) / 2;
-  cbSaveAvgPrices(email, avg);
-}
-function cbUpdateAvgOnSell(email, coinId) {
-  const avg = cbGetAvgPrices(email);
-  delete avg[coinId];
-  cbSaveAvgPrices(email, avg);
-}
+function cbUpdateAvgOnBuy(email, coinId, qty, price) { const avg = cbGetAvgPrices(email); const prev = avg[coinId] || price; avg[coinId] = (prev + price) / 2; cbSaveAvgPrices(email, avg); }
+function cbUpdateAvgOnSell(email, coinId) { const avg = cbGetAvgPrices(email); delete avg[coinId]; cbSaveAvgPrices(email, avg); }
 
-// ---- Password strength ----
 function cbPasswordStrength(pw) {
   if (!pw || pw.length < 8) return { level: "weak", label: "Too short", score: 1 };
   let score = 0;
-  if (pw.length >= 8) score++;
-  if (pw.length >= 12) score++;
-  if (/[A-Z]/.test(pw)) score++;
-  if (/[a-z]/.test(pw)) score++;
-  if (/\d/.test(pw)) score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (pw.length >= 8) score++; if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++; if (/[a-z]/.test(pw)) score++;
+  if (/\d/.test(pw)) score++; if (/[^A-Za-z0-9]/.test(pw)) score++;
   if (score <= 3) return { level: "weak", label: "Weak", score: 1 };
   if (score <= 4) return { level: "medium", label: "Medium", score: 2 };
   return { level: "strong", label: "Strong", score: 3 };
 }
 
-// ---- Rate limiting ----
 function cbGetLoginAttempts() { try { return JSON.parse(localStorage.getItem(CB_LOGIN_ATTEMPTS) || "{}"); } catch { return {}; } }
-function cbRecordFailedAttempt(email) {
-  const attempts = cbGetLoginAttempts();
-  attempts[email] = (attempts[email] || 0) + 1;
-  localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts));
-  return attempts[email];
-}
-function cbResetLoginAttempts(email) {
-  const attempts = cbGetLoginAttempts();
-  delete attempts[email]; delete attempts[email + "_until"];
-  localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts));
-}
+function cbRecordFailedAttempt(email) { const attempts = cbGetLoginAttempts(); attempts[email] = (attempts[email] || 0) + 1; localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts)); return attempts[email]; }
+function cbResetLoginAttempts(email) { const attempts = cbGetLoginAttempts(); delete attempts[email]; delete attempts[email + "_until"]; localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts)); }
 function cbIsLockedOut(email) {
-  const attempts = cbGetLoginAttempts();
-  const count = attempts[email] || 0;
+  const attempts = cbGetLoginAttempts(); const count = attempts[email] || 0;
   if (count >= 3) {
-    if (!attempts[email + "_until"] || Date.now() > attempts[email + "_until"]) {
-      attempts[email + "_until"] = Date.now() + 30 * 1000;
-      localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts));
-    }
+    if (!attempts[email + "_until"] || Date.now() > attempts[email + "_until"]) { attempts[email + "_until"] = Date.now() + 30 * 1000; localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts)); }
     const remaining = Math.ceil((attempts[email + "_until"] - Date.now()) / 1000);
     if (remaining > 0) return remaining;
     else { cbResetLoginAttempts(email); return 0; }
@@ -187,15 +137,12 @@ function cbIsLockedOut(email) {
   return 0;
 }
 
-// ---- Favorites & Recent ----
 function cbGetFavorites() { try { return JSON.parse(localStorage.getItem("cb_favorites") || "[]"); } catch { return []; } }
 function cbSaveFavorites(l) { localStorage.setItem("cb_favorites", JSON.stringify(l)); }
 function cbToggleFavorite(id) {
-  const f = cbGetFavorites();
-  const i = f.indexOf(id);
+  const f = cbGetFavorites(); const i = f.indexOf(id);
   if (i >= 0) f.splice(i, 1); else f.push(id);
-  cbSaveFavorites(f);
-  return f.includes(id);
+  cbSaveFavorites(f); return f.includes(id);
 }
 function cbGetRecent() { try { return JSON.parse(localStorage.getItem(CB_RECENT_KEY) || "[]"); } catch { return []; } }
 function cbSaveRecent(l) { localStorage.setItem(CB_RECENT_KEY, JSON.stringify(l)); }
@@ -206,7 +153,6 @@ function cbPushRecent(coin) {
   cbSaveRecent(list.slice(0, 5));
 }
 
-// ---- Formatters ----
 function cbFormatPrice(p) {
   if (p == null || isNaN(p)) return "—";
   if (p >= 1) return "$" + p.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -214,22 +160,19 @@ function cbFormatPrice(p) {
   return "$" + p.toFixed(6);
 }
 function cbFormatSigned(n, decimals) {
-  const d = decimals == null ? 2 : decimals;
-  const sign = n >= 0 ? "+" : "-";
+  const d = decimals == null ? 2 : decimals; const sign = n >= 0 ? "+" : "-";
   return sign + "$" + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
 }
 function cbSparkline(prices, width, height, up) {
   width = width || 60; height = height || 24;
   if (!prices || prices.length < 2) return "";
-  const min = Math.min(...prices), max = Math.max(...prices);
-  const range = max - min || 1;
+  const min = Math.min(...prices), max = Math.max(...prices); const range = max - min || 1;
   const step = width / (prices.length - 1);
   const pts = prices.map((p, i) => `${(i * step).toFixed(1)},${(height - ((p - min) / range) * (height - 4) - 2).toFixed(1)}`).join(" ");
   const color = up ? "var(--up)" : "var(--down)";
   return `<svg class="sparkline" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 
-// ---- Transactions & Alerts ----
 async function cbGetTransactions(email) {
   const sb = await cbSB(); if (!sb) return [];
   const user = await cbCurrentUser(); if (!user) return [];
@@ -259,7 +202,6 @@ async function cbRemoveAlert(email, id) {
   await sb.from("alerts").delete().eq("id", id).eq("user_id", user.id);
 }
 
-// ---- Notifications ----
 async function cbGetNotifications(email) {
   const sb = await cbSB(); if (!sb) return [];
   const user = await cbCurrentUser(); if (!user) return [];
@@ -301,8 +243,7 @@ async function cbCheckAlerts(coins) {
   const byId = Object.fromEntries(coins.map(c => [c.id, c]));
   for (const a of alerts) {
     if (a.triggered) continue;
-    const coin = byId[a.coinId];
-    if (!coin) continue;
+    const coin = byId[a.coinId]; if (!coin) continue;
     const hit = (a.direction === "above" && coin.current_price >= a.targetPrice) || (a.direction === "below" && coin.current_price <= a.targetPrice);
     if (hit) {
       await sb.from("alerts").update({ triggered: true }).eq("id", a.id);
@@ -311,21 +252,17 @@ async function cbCheckAlerts(coins) {
   }
 }
 
-// ---- History ----
 function cbGetHistory(email) { try { return JSON.parse(localStorage.getItem("cb_history_" + email) || "[]"); } catch { return []; } }
 function cbSaveHistory(email, l) { localStorage.setItem("cb_history_" + email, JSON.stringify(l)); }
 function cbSnapshotPortfolio(email, totalUsd) {
   if (!email || totalUsd == null || isNaN(totalUsd)) return;
-  const h = cbGetHistory(email);
-  const today = new Date().toISOString().slice(0, 10);
-  const last = h[h.length - 1];
+  const h = cbGetHistory(email); const today = new Date().toISOString().slice(0, 10); const last = h[h.length - 1];
   if (last && last.date === today) last.value = +totalUsd.toFixed(2);
   else h.push({ date: today, value: +totalUsd.toFixed(2) });
   if (h.length > 365) h.splice(0, h.length - 365);
   cbSaveHistory(email, h);
 }
 
-// ---- Theme & Guards ----
 function cbGetTheme() { return localStorage.getItem(CB_THEME_KEY) || "dark"; }
 function cbSetTheme(t) { localStorage.setItem(CB_THEME_KEY, t); if (t === "light") document.body.classList.add("light"); else document.body.classList.remove("light"); }
 function cbApplyTheme() { cbSetTheme(cbGetTheme()); }
@@ -343,20 +280,14 @@ function cbRenderAvatarHTML(user, size) {
   return `<span class="avatar-emoji" style="font-size:${Math.round(s * 0.7)}px">${user.avatarEmoji || "🦁"}</span>`;
 }
 
-async function cbLogout() {
-  if (confirm("Log out of CoinBrave?")) { await cbClearSession(); location.href = "index.html"; }
-}
+async function cbLogout() { if (confirm("Log out of CoinBrave?")) { await cbClearSession(); location.href = "index.html"; } }
 
 async function cbDeleteAccount(email) {
   if (!confirm("Delete your account PERMANENTLY?\n\nAll your wallet, trades, alerts, and settings will be erased forever. This cannot be undone.")) return false;
   const typed = prompt('Type DELETE (all caps) to confirm:');
   if (typed !== "DELETE") { alert("Cancelled. Account not deleted."); return false; }
   const sb = await cbSB();
-  if (sb) {
-    const user = await cbCurrentUser();
-    if (user) await sb.from("profiles").delete().eq("id", user.id);
-    await cbClearSession();
-  }
+  if (sb) { const user = await cbCurrentUser(); if (user) await sb.from("profiles").delete().eq("id", user.id); await cbClearSession(); }
   return true;
 }
 
@@ -364,8 +295,7 @@ async function cbResetWallet(email) {
   if (!confirm("Reset your demo wallet?\n\nYour cash returns to $5,000 and your starter coins are restored. All transactions are cleared. Your account and alerts stay.")) return false;
   const sb = await cbSB(); if (!sb) return false;
   const user = await cbCurrentUser(); if (!user) return false;
-  const w = cbDefaultWallet();
-  const payload = { user_id: user.id, updated_at: new Date().toISOString() };
+  const w = cbDefaultWallet(); const payload = { user_id: user.id, updated_at: new Date().toISOString() };
   Object.keys(w).forEach(k => payload[k] = w[k]);
   await sb.from("wallets").update(payload).eq("user_id", user.id);
   await sb.from("transactions").delete().eq("user_id", user.id);
@@ -374,7 +304,6 @@ async function cbResetWallet(email) {
   return true;
 }
 
-// ---- Referral ----
 async function cbValidateReferralCode(code) {
   const sb = await cbSB(); if (!code || !sb) return null;
   const normalized = code.trim().toUpperCase(); if (!normalized) return null;
@@ -384,8 +313,7 @@ async function cbValidateReferralCode(code) {
 }
 async function cbApplyReferral(newUserEmail, referrerId) {
   const sb = await cbSB(); if (!sb) return;
-  const bonus = 5;
-  const me = await cbCurrentUser();
+  const bonus = 5; const me = await cbCurrentUser();
   if (me) {
     const w = await cbGetWallet(me.email);
     if (w) await sb.from("wallets").update({ usd: (w.usd || 0) + bonus }).eq("user_id", me.id);
@@ -401,7 +329,6 @@ async function cbApplyReferral(newUserEmail, referrerId) {
   }
 }
 
-// ---- Footer, Pull-to-refresh, Funds, AI ----
 function cbRenderFooter() {
   if (document.querySelector(".cb-footer")) return;
   const f = document.createElement("footer"); f.className = "cb-footer";
@@ -459,20 +386,11 @@ async function cbOpenFundsModal(mode, onSuccess) {
 async function cbRenderNav() {
   cbApplyTheme();
   cbRenderFooter();
-
-  // 1. Paint guest nav instantly (no waiting for network!)
   _cbPaintNav(null, 0);
-
-  // 2. Check auth in background and repaint if logged in
   try {
     const user = await cbCurrentUser();
-    if (user) {
-      const unread = await cbUnreadNotificationsCount(user.email);
-      _cbPaintNav(user, unread);
-    }
-  } catch (e) {
-    console.warn("Nav auth check failed", e);
-  }
+    if (user) { const unread = await cbUnreadNotificationsCount(user.email); _cbPaintNav(user, unread); }
+  } catch (e) { console.warn("Nav auth check failed", e); }
 }
 
 function _cbPaintNav(user, unread) {
@@ -482,24 +400,16 @@ function _cbPaintNav(user, unread) {
 
   const nav = document.querySelector(".nav");
   if (nav) {
-    if (user) {
-      nav.innerHTML = `<a href="index.html" class="${isHome}">Home</a><a href="market.html" class="${is('market.html')}">Market</a><a href="trade.html" class="${is('trade.html')}">Trade</a><a href="wallet.html" class="${is('wallet.html')}">Assets</a><a href="notifications.html" class="cb-bell" title="Notifications" style="position:relative;font-size:1.1rem;padding:6px 10px">🔔<span id="cbBellBadge" class="bell-badge" style="${unread>0?'':'display:none'}">${unread>99?'99+':unread}</span></a><a href="#" id="logoutBtn" class="btn-signup">Log Out</a>`;
-      document.getElementById("logoutBtn").addEventListener("click", (e) => { e.preventDefault(); cbLogout(); });
-    } else {
-      nav.innerHTML = `<a href="index.html" class="${isHome}">Home</a><a href="market.html" class="${is('market.html')}">Market</a><a href="trade.html" class="${is('trade.html')}">Trade</a><a href="login.html" class="${is('login.html')}">Log In</a><a href="signup.html" class="btn-signup ${is('signup.html')}">Sign Up</a>`;
-    }
+    if (user) { nav.innerHTML = `<a href="index.html" class="${isHome}">Home</a><a href="market.html" class="${is('market.html')}">Market</a><a href="trade.html" class="${is('trade.html')}">Trade</a><a href="wallet.html" class="${is('wallet.html')}">Assets</a><a href="notifications.html" class="cb-bell" title="Notifications" style="position:relative;font-size:1.1rem;padding:6px 10px">🔔<span id="cbBellBadge" class="bell-badge" style="${unread>0?'':'display:none'}">${unread>99?'99+':unread}</span></a><a href="#" id="logoutBtn" class="btn-signup">Log Out</a>`; document.getElementById("logoutBtn").addEventListener("click", (e) => { e.preventDefault(); cbLogout(); }); }
+    else { nav.innerHTML = `<a href="index.html" class="${isHome}">Home</a><a href="market.html" class="${is('market.html')}">Market</a><a href="trade.html" class="${is('trade.html')}">Trade</a><a href="login.html" class="${is('login.html')}">Log In</a><a href="signup.html" class="btn-signup ${is('signup.html')}">Sign Up</a>`; }
   }
 
   const topbar = document.querySelector(".topbar");
   if (topbar) {
     let userArea = document.getElementById("topbarUser");
     if (!userArea) { userArea = document.createElement("div"); userArea.id = "topbarUser"; userArea.className = "topbar-user"; topbar.appendChild(userArea); }
-    if (user) {
-      userArea.innerHTML = `<a href="notifications.html" class="cb-bell" title="Notifications" style="position:relative;font-size:1.15rem;padding:6px 10px;color:var(--text)">🔔<span class="bell-badge" style="${unread>0?'':'display:none'}">${unread>99?'99+':unread}</span></a><div class="user-chip">${cbRenderAvatarHTML(user, 22)} <span>${user.name}</span></div><a href="#" id="logoutBtnMobile" class="btn-signup">Log Out</a>`;
-      document.getElementById("logoutBtnMobile").addEventListener("click", (e) => { e.preventDefault(); cbLogout(); });
-    } else {
-      userArea.innerHTML = `<a href="login.html" class="btn-signup" style="background:var(--bg-hover);color:var(--text) !important">Log In</a><a href="signup.html" class="btn-signup">Sign Up</a>`;
-    }
+    if (user) { userArea.innerHTML = `<a href="notifications.html" class="cb-bell" title="Notifications" style="position:relative;font-size:1.15rem;padding:6px 10px;color:var(--text)">🔔<span class="bell-badge" style="${unread>0?'':'display:none'}">${unread>99?'99+':unread}</span></a><div class="user-chip">${cbRenderAvatarHTML(user, 22)} <span>${user.name}</span></div><a href="#" id="logoutBtnMobile" class="btn-signup">Log Out</a>`; document.getElementById("logoutBtnMobile").addEventListener("click", (e) => { e.preventDefault(); cbLogout(); }); }
+    else { userArea.innerHTML = `<a href="login.html" class="btn-signup" style="background:var(--bg-hover);color:var(--text) !important">Log In</a><a href="signup.html" class="btn-signup">Sign Up</a>`; }
   }
 
   let bn = document.querySelector(".bottom-nav");
@@ -517,19 +427,12 @@ function cbRenderProfileDrawer(user) {
     drawer = document.createElement("aside"); drawer.id = "cbDrawer"; drawer.className = "drawer"; document.body.appendChild(drawer);
     overlay.addEventListener("click", cbCloseDrawer);
   }
-  if (!user) {
-    drawer.innerHTML = `<div class="drawer-header"><div class="drawer-avatar"><span class="avatar-emoji" style="font-size:32px">🧠</span></div><div class="drawer-info"><div class="drawer-name">Welcome</div><div class="drawer-id">Sign up to unlock</div></div><button class="drawer-close" id="cbDrawerClose">×</button></div><nav class="drawer-menu"><a href="index.html" class="drawer-item"><span class="drawer-icon">🏠</span><span>Home</span></a><a href="market.html" class="drawer-item"><span class="drawer-icon">📊</span><span>Market</span></a><a href="about.html" class="drawer-item"><span class="drawer-icon">ℹ️</span><span>About</span></a><a href="privacy.html" class="drawer-item"><span class="drawer-icon">🔒</span><span>Privacy</span></a><a href="terms.html" class="drawer-item"><span class="drawer-icon">📄</span><span>Terms</span></a><a href="login.html" class="drawer-item"><span class="drawer-icon">🔑</span><span>Log In</span></a><a href="signup.html" class="drawer-item"><span class="drawer-icon">✨</span><span>Sign Up</span></a></nav>`;
-  } else {
-    drawer.innerHTML = `<div class="drawer-header"><div class="drawer-avatar">${cbRenderAvatarHTML(user, 48)}</div><div class="drawer-info"><div class="drawer-name">${user.name}</div><div class="drawer-id">${user.userId}</div></div><button class="drawer-close" id="cbDrawerClose">×</button></div><nav class="drawer-menu"><a href="index.html" class="drawer-item"><span class="drawer-icon">🏠</span><span>Home</span></a><a href="wallet.html" class="drawer-item"><span class="drawer-icon">💰</span><span>Assets</span></a><a href="transactions.html" class="drawer-item"><span class="drawer-icon">📜</span><span>Transaction History</span></a><a href="rewards.html" class="drawer-item"><span class="drawer-icon">🎁</span><span>Rewards Hub</span></a><a href="referral.html" class="drawer-item"><span class="drawer-icon">🤝</span><span>Referral</span></a><a href="notifications.html" class="drawer-item"><span class="drawer-icon">🔔</span><span>Notifications</span></a><a href="settings.html" class="drawer-item"><span class="drawer-icon">⚙️</span><span>Settings</span></a><a href="about.html" class="drawer-item"><span class="drawer-icon">ℹ️</span><span>About</span></a><button id="cbDrawerLogout" class="drawer-item drawer-logout"><span class="drawer-icon">🚪</span><span>Log Out</span></button></nav>`;
-    document.getElementById("cbDrawerLogout").addEventListener("click", cbLogout);
-  }
+  if (!user) { drawer.innerHTML = `<div class="drawer-header"><div class="drawer-avatar"><span class="avatar-emoji" style="font-size:32px">🧠</span></div><div class="drawer-info"><div class="drawer-name">Welcome</div><div class="drawer-id">Sign up to unlock</div></div><button class="drawer-close" id="cbDrawerClose">×</button></div><nav class="drawer-menu"><a href="index.html" class="drawer-item"><span class="drawer-icon">🏠</span><span>Home</span></a><a href="market.html" class="drawer-item"><span class="drawer-icon">📊</span><span>Market</span></a><a href="about.html" class="drawer-item"><span class="drawer-icon">ℹ️</span><span>About</span></a><a href="privacy.html" class="drawer-item"><span class="drawer-icon">🔒</span><span>Privacy</span></a><a href="terms.html" class="drawer-item"><span class="drawer-icon">📄</span><span>Terms</span></a><a href="login.html" class="drawer-item"><span class="drawer-icon">🔑</span><span>Log In</span></a><a href="signup.html" class="drawer-item"><span class="drawer-icon">✨</span><span>Sign Up</span></a></nav>`; }
+  else { drawer.innerHTML = `<div class="drawer-header"><div class="drawer-avatar">${cbRenderAvatarHTML(user, 48)}</div><div class="drawer-info"><div class="drawer-name">${user.name}</div><div class="drawer-id">${user.userId}</div></div><button class="drawer-close" id="cbDrawerClose">×</button></div><nav class="drawer-menu"><a href="index.html" class="drawer-item"><span class="drawer-icon">🏠</span><span>Home</span></a><a href="wallet.html" class="drawer-item"><span class="drawer-icon">💰</span><span>Assets</span></a><a href="transactions.html" class="drawer-item"><span class="drawer-icon">📜</span><span>Transaction History</span></a><a href="rewards.html" class="drawer-item"><span class="drawer-icon">🎁</span><span>Rewards Hub</span></a><a href="referral.html" class="drawer-item"><span class="drawer-icon">🤝</span><span>Referral</span></a><a href="notifications.html" class="drawer-item"><span class="drawer-icon">🔔</span><span>Notifications</span></a><a href="settings.html" class="drawer-item"><span class="drawer-icon">⚙️</span><span>Settings</span></a><a href="about.html" class="drawer-item"><span class="drawer-icon">ℹ️</span><span>About</span></a><button id="cbDrawerLogout" class="drawer-item drawer-logout"><span class="drawer-icon">🚪</span><span>Log Out</span></button></nav>`; document.getElementById("cbDrawerLogout").addEventListener("click", cbLogout); }
   const closeBtn = document.getElementById("cbDrawerClose");
   if (closeBtn) closeBtn.addEventListener("click", cbCloseDrawer);
   const logo = document.querySelector(".logo");
-  if (logo && !logo._cbBound) {
-    logo._cbBound = true; logo.style.cursor = "pointer";
-    logo.addEventListener("click", async () => { const u = await cbCurrentUser(); if (u) cbOpenDrawer(); else location.href = "index.html"; });
-  }
+  if (logo && !logo._cbBound) { logo._cbBound = true; logo.style.cursor = "pointer"; logo.addEventListener("click", async () => { const u = await cbCurrentUser(); if (u) cbOpenDrawer(); else location.href = "index.html"; }); }
 }
 
 function cbOpenDrawer() { const o = document.getElementById("cbDrawerOverlay"), d = document.getElementById("cbDrawer"); if (!o || !d) return; o.classList.remove("hidden"); d.classList.add("open"); document.body.style.overflow = "hidden"; }
