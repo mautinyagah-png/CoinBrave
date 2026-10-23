@@ -1,5 +1,5 @@
 // ============================================================
-// CoinBrave auth.js — SUPABASE VERSION (Bulletproof URL)
+// CoinBrave auth.js — SUPABASE VERSION (Race-Condition Fixed)
 // ============================================================
 
 (function cbInject() {
@@ -62,8 +62,10 @@ async function cbCurrentUser() {
   try {
     const sb = await cbSB(); if (!sb) return null;
     if (_cbUserCache && Date.now() - _cbUserCacheTime < CB_USER_CACHE_MS) return _cbUserCache;
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) { _cbUserCache = null; return null; }
+    
+    // Wait for Supabase to finish reading local storage
+    const { data: { session }, error } = await sb.auth.getSession();
+    if (error || !session) { _cbUserCache = null; return null; }
     const user = session.user;
 
     let profile = null;
@@ -267,8 +269,14 @@ function cbSetTheme(t) { localStorage.setItem(CB_THEME_KEY, t); if (t === "light
 function cbApplyTheme() { cbSetTheme(cbGetTheme()); }
 
 async function cbRequireAuth() {
+  // Wait for Supabase to finish its async setup before checking
+  await cbSB();
   const user = await cbCurrentUser();
-  if (!user) { localStorage.setItem(CB_REDIRECT_KEY, location.href); location.href = "login.html"; return false; }
+  if (!user) { 
+    localStorage.setItem(CB_REDIRECT_KEY, location.href); 
+    location.href = "login.html"; 
+    return false; 
+  }
   return true;
 }
 
