@@ -17,6 +17,11 @@ document.addEventListener("DOMContentLoaded", () => {
   cbEnablePullToRefresh(loadHomeData);
   renderSkeletons();
   loadHomeData();
+
+  // Refresh data when you come back to this tab
+  window.addEventListener('focus', () => {
+    if (allCoins.length > 0) renderBalanceCard();
+  });
 });
 
 function bindAddFunds() {
@@ -44,7 +49,7 @@ function renderGreeting(user) {
   if (!user) { wrap.style.display = "none"; return; }
   wrap.style.display = "";
   const name = user.name || user.email || "Trader";
-  const firstName = String(name).split(" ")[0]; // Fix: ensure it is a string
+  const firstName = String(name).split(" ")[0];
   document.getElementById("greeting").innerHTML = `${getGreeting()}, <span class="name">${firstName}</span> 👋`;
   document.getElementById("greetingSub").textContent = "Here's your portfolio today";
 }
@@ -153,14 +158,14 @@ function bindCoinRows(container) {
 
 async function renderBalanceCard() {
   try {
-    const user = await cbCurrentUser();
+    const user = cbCurrentUser();
     const hero = document.getElementById("landingHero");
     const card = document.getElementById("balanceCard");
     renderGreeting(user);
     if (!user) { hero.style.display = ""; card.style.display = "none"; return; }
     hero.style.display = "none"; card.style.display = "";
 
-    const wallet = await cbGetWallet(user.email) || { usd: 0 };
+    const wallet = cbGetWallet(user.email) || { usd: 0 };
     const avgPrices = cbGetAvgPrices(user.email);
     const cash = wallet.usd || 0;
     let total = cash, change24 = 0, totalCost = 0;
@@ -177,6 +182,7 @@ async function renderBalanceCard() {
       holdings.push({ coin, amount });
     }
 
+    // Snapshot the new total (in case we just made a trade/withdrawal)
     cbSnapshotPortfolio(user.email, total);
 
     document.getElementById("balanceValue").textContent = "$" + total.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -195,98 +201,118 @@ async function renderBalanceCard() {
       plEl.innerHTML = `<span class="muted">P/L:</span> <span class="${plCls}">${cbFormatSigned(pl)} (${pl >= 0 ? "+" : ""}${plPct.toFixed(2)}%)</span>`;
     } else plEl.innerHTML = "";
 
-    await drawChart(holdings, cash, chartRange);
+    await drawChart(user.email, holdings, cash, chartRange);
   } catch (e) {
     console.error("Balance render failed", e);
     document.getElementById("landingHero").style.display = "";
   }
 }
 
-async function drawChart(holdings, cash, days) {
+async function drawChart(email, holdings, cash, days) {
   const chartEl = document.getElementById("balanceChart");
   const tooltip = document.getElementById("chartTooltip");
-  if (holdings.length === 0) {
+  
+  // 1. Get the user's actual historical snapshots
+  const history = cbGetHistory(email);
+  
+  // 2. If they have less than 2 snapshots, fall back to generating from live data
+  let points = [];
+  if (history.length >= 2) {
+    points = history.map(h => ({ date: new Date(h.date).getTime(), value: h.value }));
+  } else if (holdings.length > 0) {
+    // Generate a simple 7-day line from current holdings if no history exists
+    chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Loading chart…</text>`;
+    try {
+      const sorted = [...holdings].sort((a, b) => b.amount * b.coin.current_price - a.amount * a.coin.current_price).slice(0, 5);
+      const series = await Promise.all(sorted.map(h => fetchHistory(h.coin.id, days)));
+      const minLen = Math.min(...series.map(s => s.prices.length));
+      if (minLen < 2) throw new Error("Not enough data points");
+      const dates = series[0].prices.map(p => p[0]);
+      for (let i = 0; i < minLen; i++) {
+        let val = cash;
+        for (let j = 0; j < sorted.length; j++) val += sorted[j].amount * series[j].prices[i][1];
+        points.push({ date: dates[i], value: val });
+      }
+    } catch (err) {
+      chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--down)" font-size="12">Chart unavailable</text>`;
+      return;
+    }
+  } else {
     chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Buy some coins to track growth</text>`;
     tooltip.classList.remove("show");
     return;
   }
-  chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Loading chart…</text>`;
 
-  try {
-    const sorted = [...holdings].sort((a, b) => b.amount * b.coin.current_price - a.amount * a.coin.current_price).slice(0, 5);
-    const series = await Promise.all(sorted.map(h => fetchHistory(h.coin.id, days)));
-    const minLen = Math.min(...series.map(s => s.prices.length));
-    if (minLen < 2) throw new Error("Not enough data points");
-
-    const dates = series[0].prices.map(p => p[0]);
-    const points = [];
-    for (let i = 0; i < minLen; i++) {
-      let val = cash;
-      for (let j = 0; j < sorted.length; j++) val += sorted[j].amount * series[j].prices[i][1];
-      points.push({ date: dates[i], value: val });
-    }
-    chartData = points;
-
-    const values = points.map(p => p.value);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    if (max === min) {
-      chartEl.innerHTML = `<line x1="0" y1="70" x2="400" y2="70" stroke="var(--text-muted)" stroke-width="2" stroke-dasharray="4 4"/>`;
-      return;
-    }
-    const range = max - min;
-    const W = 400, H = 140;
-    const scaled = points.map((p, i) => {
-      const x = (i / (points.length - 1)) * W;
-      const y = H - ((p.value - min) / range) * (H - 20) - 10;
-      p._x = x; p._y = y;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-    const up = points[points.length - 1].value >= points[0].value;
-    const color = up ? "var(--up)" : "var(--down)";
-    chartEl.innerHTML = `
-      <defs>
-        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <polygon points="0,${H} ${scaled} ${W},${H}" fill="url(#chartGrad)"/>
-      <polyline points="${scaled}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-      <line id="chartHoverLine" x1="0" y1="0" x2="0" y2="${H}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
-      <circle id="chartHoverDot" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
-    `;
-    chartEl.onmousemove = (e) => {
-      const rect = chartEl.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * W;
-      let nearest = chartData[0];
-      for (const p of chartData) { if (Math.abs(p._x - x) < Math.abs(nearest._x - x)) nearest = p; }
-      if (!nearest) return;
-      const line = document.getElementById("chartHoverLine");
-      const dot = document.getElementById("chartHoverDot");
-      if (line) { line.setAttribute("x1", nearest._x); line.setAttribute("x2", nearest._x); line.setAttribute("opacity", "1"); }
-      if (dot) { dot.setAttribute("cx", nearest._x); dot.setAttribute("cy", nearest._y); dot.setAttribute("opacity", "1"); }
-      const dateStr = new Date(nearest.date).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' });
-      tooltip.innerHTML = `<div class="tt-date">${dateStr}</div><div class="tt-value">$${nearest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>`;
-      const wrap = chartEl.parentElement;
-      const tRect = wrap.getBoundingClientRect();
-      let left = e.clientX - tRect.left + 12;
-      if (left + 140 > tRect.width) left = e.clientX - tRect.left - 150;
-      tooltip.style.left = left + "px";
-      tooltip.style.top = (e.clientY - tRect.top - 40) + "px";
-      tooltip.classList.add("show");
-    };
-    chartEl.onmouseleave = () => {
-      tooltip.classList.remove("show");
-      const line = document.getElementById("chartHoverLine");
-      const dot = document.getElementById("chartHoverDot");
-      if (line) line.setAttribute("opacity", "0");
-      if (dot) dot.setAttribute("opacity", "0");
-    };
-  } catch (err) {
-    console.error("Chart error:", err);
-    chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--down)" font-size="12">Chart unavailable</text>`;
+  // 3. Filter by days
+  const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
+  points = points.filter(p => p.date >= cutoff);
+  if (points.length < 2) {
+    chartEl.innerHTML = `<text x="200" y="70" text-anchor="middle" fill="var(--text-muted)" font-size="12">Not enough data for this range</text>`;
+    return;
   }
+
+  chartData = points;
+  const values = points.map(p => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  
+  if (max === min) {
+    chartEl.innerHTML = `<line x1="0" y1="70" x2="400" y2="70" stroke="var(--text-muted)" stroke-width="2" stroke-dasharray="4 4"/>`;
+    return;
+  }
+
+  const range = max - min;
+  const W = 400, H = 140;
+  const scaled = points.map((p, i) => {
+    const x = (i / (points.length - 1)) * W;
+    const y = H - ((p.value - min) / range) * (H - 20) - 10;
+    p._x = x; p._y = y;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+
+  const up = points[points.length - 1].value >= points[0].value;
+  const color = up ? "var(--up)" : "var(--down)";
+  
+  chartEl.innerHTML = `
+    <defs>
+      <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="0,${H} ${scaled} ${W},${H}" fill="url(#chartGrad)"/>
+    <polyline points="${scaled}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    <line id="chartHoverLine" x1="0" y1="0" x2="0" y2="${H}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
+    <circle id="chartHoverDot" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
+  `;
+
+  chartEl.onmousemove = (e) => {
+    const rect = chartEl.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * W;
+    let nearest = chartData[0];
+    for (const p of chartData) { if (Math.abs(p._x - x) < Math.abs(nearest._x - x)) nearest = p; }
+    if (!nearest) return;
+    const line = document.getElementById("chartHoverLine");
+    const dot = document.getElementById("chartHoverDot");
+    if (line) { line.setAttribute("x1", nearest._x); line.setAttribute("x2", nearest._x); line.setAttribute("opacity", "1"); }
+    if (dot) { dot.setAttribute("cx", nearest._x); dot.setAttribute("cy", nearest._y); dot.setAttribute("opacity", "1"); }
+    const dateStr = new Date(nearest.date).toLocaleString(undefined, { month: 'short', day: 'numeric' });
+    tooltip.innerHTML = `<div class="tt-date">${dateStr}</div><div class="tt-value">$${nearest.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>`;
+    const wrap = chartEl.parentElement;
+    const tRect = wrap.getBoundingClientRect();
+    let left = e.clientX - tRect.left + 12;
+    if (left + 140 > tRect.width) left = e.clientX - tRect.left - 150;
+    tooltip.style.left = left + "px";
+    tooltip.style.top = (e.clientY - tRect.top - 40) + "px";
+    tooltip.classList.add("show");
+  };
+  chartEl.onmouseleave = () => {
+    tooltip.classList.remove("show");
+    const line = document.getElementById("chartHoverLine");
+    const dot = document.getElementById("chartHoverDot");
+    if (line) line.setAttribute("opacity", "0");
+    if (dot) dot.setAttribute("opacity", "0");
+  };
 }
 
 async function fetchHistory(coinId, days) {
@@ -315,23 +341,19 @@ function bindRangeTabs() {
       document.querySelectorAll(".range-tabs button").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       chartRange = parseInt(btn.dataset.range, 10);
-      refreshChart();
+      const user = cbCurrentUser();
+      if (user) {
+        const wallet = cbGetWallet(user.email) || { usd: 0 };
+        const holdings = [];
+        for (const [id, amount] of Object.entries(wallet)) {
+          if (id === "usd" || !amount) continue;
+          const coin = allCoins.find(c => c.id === id);
+          if (coin) holdings.push({ coin, amount });
+        }
+        drawChart(user.email, holdings, wallet.usd || 0, chartRange);
+      }
     });
   });
-}
-
-async function refreshChart() {
-  const user = await cbCurrentUser();
-  if (!user) return;
-  const wallet = await cbGetWallet(user.email) || { usd: 0 };
-  const cash = wallet.usd || 0;
-  const holdings = [];
-  for (const [id, amount] of Object.entries(wallet)) {
-    if (id === "usd" || id === "user_id" || id === "updated_at" || !amount) continue;
-    const coin = allCoins.find(c => c.id === id);
-    if (coin) holdings.push({ coin, amount });
-  }
-  await drawChart(holdings, cash, chartRange);
 }
 
 function bindDiscoveryTabs() {
