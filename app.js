@@ -43,7 +43,8 @@ function renderGreeting(user) {
   const wrap = document.getElementById("greetingWrap");
   if (!user) { wrap.style.display = "none"; return; }
   wrap.style.display = "";
-  const firstName = user.name.split(" ")[0];
+  const name = user.name || user.email || "Trader";
+  const firstName = name.split(" ")[0];
   document.getElementById("greeting").innerHTML = `${getGreeting()}, <span class="name">${firstName}</span> 👋`;
   document.getElementById("greetingSub").textContent = "Here's your portfolio today";
 }
@@ -151,49 +152,54 @@ function bindCoinRows(container) {
 }
 
 async function renderBalanceCard() {
-  const user = cbCurrentUser();
-  const hero = document.getElementById("landingHero");
-  const card = document.getElementById("balanceCard");
-  renderGreeting(user);
-  if (!user) { hero.style.display = ""; card.style.display = "none"; return; }
-  hero.style.display = "none"; card.style.display = "";
+  try {
+    const user = await cbCurrentUser();
+    const hero = document.getElementById("landingHero");
+    const card = document.getElementById("balanceCard");
+    renderGreeting(user);
+    if (!user) { hero.style.display = ""; card.style.display = "none"; return; }
+    hero.style.display = "none"; card.style.display = "";
 
-  const wallet = cbGetWallet(user.email) || { usd: 0 };
-  const avgPrices = cbGetAvgPrices(user.email);
-  const cash = wallet.usd || 0;
-  let total = cash, change24 = 0, totalCost = 0;
-  const holdings = [];
+    const wallet = await cbGetWallet(user.email) || { usd: 0 };
+    const avgPrices = cbGetAvgPrices(user.email);
+    const cash = wallet.usd || 0;
+    let total = cash, change24 = 0, totalCost = 0;
+    const holdings = [];
 
-  for (const [id, amount] of Object.entries(wallet)) {
-    if (id === "usd" || !amount) continue;
-    const coin = allCoins.find(c => c.id === id);
-    if (!coin) continue;
-    const usd = amount * coin.current_price;
-    total += usd;
-    change24 += usd * ((coin.price_change_percentage_24h ?? 0) / 100);
-    totalCost += amount * (avgPrices[id] || 0);
-    holdings.push({ coin, amount });
+    for (const [id, amount] of Object.entries(wallet)) {
+      if (id === "usd" || id === "user_id" || id === "updated_at" || !amount) continue;
+      const coin = allCoins.find(c => c.id === id);
+      if (!coin) continue;
+      const usd = amount * coin.current_price;
+      total += usd;
+      change24 += usd * ((coin.price_change_percentage_24h ?? 0) / 100);
+      totalCost += amount * (avgPrices[id] || 0);
+      holdings.push({ coin, amount });
+    }
+
+    cbSnapshotPortfolio(user.email, total);
+
+    document.getElementById("balanceValue").textContent = "$" + total.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    const prev = total - change24;
+    const pct = prev > 0 ? (change24 / prev) * 100 : 0;
+    const cls = change24 >= 0 ? "up" : "down";
+    const arrow = change24 >= 0 ? "▲" : "▼";
+    const sign = change24 >= 0 ? "+" : "-";
+    document.getElementById("balanceChange").innerHTML = `<span class="${cls}">${arrow} ${sign}$${Math.abs(change24).toFixed(2)} (${sign}${Math.abs(pct).toFixed(2)}%)</span> <span class="muted">· 24h</span>`;
+
+    const plEl = document.getElementById("balancePL");
+    if (totalCost > 0) {
+      const pl = total - cash - totalCost;
+      const plPct = (pl / totalCost) * 100;
+      const plCls = pl >= 0 ? "up" : "down";
+      plEl.innerHTML = `<span class="muted">P/L:</span> <span class="${plCls}">${cbFormatSigned(pl)} (${pl >= 0 ? "+" : ""}${plPct.toFixed(2)}%)</span>`;
+    } else plEl.innerHTML = "";
+
+    await drawChart(holdings, cash, chartRange);
+  } catch (e) {
+    console.error("Balance render failed", e);
+    document.getElementById("landingHero").style.display = "";
   }
-
-  cbSnapshotPortfolio(user.email, total);
-
-  document.getElementById("balanceValue").textContent = "$" + total.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  const prev = total - change24;
-  const pct = prev > 0 ? (change24 / prev) * 100 : 0;
-  const cls = change24 >= 0 ? "up" : "down";
-  const arrow = change24 >= 0 ? "▲" : "▼";
-  const sign = change24 >= 0 ? "+" : "-";
-  document.getElementById("balanceChange").innerHTML = `<span class="${cls}">${arrow} ${sign}$${Math.abs(change24).toFixed(2)} (${sign}${Math.abs(pct).toFixed(2)}%)</span> <span class="muted">· 24h</span>`;
-
-  const plEl = document.getElementById("balancePL");
-  if (totalCost > 0) {
-    const pl = total - cash - totalCost;
-    const plPct = (pl / totalCost) * 100;
-    const plCls = pl >= 0 ? "up" : "down";
-    plEl.innerHTML = `<span class="muted">P/L:</span> <span class="${plCls}">${cbFormatSigned(pl)} (${pl >= 0 ? "+" : ""}${plPct.toFixed(2)}%)</span>`;
-  } else plEl.innerHTML = "";
-
-  await drawChart(holdings, cash, chartRange);
 }
 
 async function drawChart(holdings, cash, days) {
@@ -315,13 +321,13 @@ function bindRangeTabs() {
 }
 
 async function refreshChart() {
-  const user = cbCurrentUser();
+  const user = await cbCurrentUser();
   if (!user) return;
-  const wallet = cbGetWallet(user.email) || { usd: 0 };
+  const wallet = await cbGetWallet(user.email) || { usd: 0 };
   const cash = wallet.usd || 0;
   const holdings = [];
   for (const [id, amount] of Object.entries(wallet)) {
-    if (id === "usd" || !amount) continue;
+    if (id === "usd" || id === "user_id" || id === "updated_at" || !amount) continue;
     const coin = allCoins.find(c => c.id === id);
     if (coin) holdings.push({ coin, amount });
   }
