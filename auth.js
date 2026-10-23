@@ -1,10 +1,11 @@
 // ============================================================
-// CoinBrave auth.js — NO CACHE / NO RACE CONDITIONS
+// CoinBrave auth.js — FINAL COMPLETE FIX
 // ============================================================
 
 async function cbSB() {
   if (window.sb) return window.sb;
   if (window._cbSupabaseReady) return window._cbSupabaseReady;
+  
   window._cbSupabaseReady = (async () => {
     await new Promise((resolve) => {
       if (window.supabase && window.supabase.createClient) return resolve();
@@ -14,46 +15,61 @@ async function cbSB() {
       s.onerror = () => { console.error("Supabase SDK load failed"); resolve(); };
       document.head.appendChild(s);
     });
+    
     if (!window.sb && window.supabase) {
-      const url = "https://yycwsvtxtrqzpjdpnjjb.supabase.co";
-      const key = "sb_publishable_b4keaWfThlv9vgxQcMTyGA_e-nwKLRd";
-      window.sb = window.supabase.createClient(url, key, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-      });
+      // HARDCODED URL to guarantee it is never empty
+      window.sb = window.supabase.createClient(
+        "https://yycwsvtxtrqzpjdpnjjb.supabase.co", 
+        "sb_publishable_b4keaWfThlv9vgxQcMTyGA_e-nwKLRd",
+        { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
+      );
     }
     return window.sb;
   })();
   return window._cbSupabaseReady;
 }
 
+// Auto-inject head tags
+(function cbInject() {
+  if (typeof document === 'undefined') return;
+  const add = (tag, attrs) => { const el = document.createElement(tag); Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v)); document.head.appendChild(el); };
+  if (!document.querySelector('link[rel="icon"]')) add('link', { rel: 'icon', type: 'image/svg+xml', href: 'favicon.svg' });
+  if (!document.querySelector('link[rel="apple-touch-icon"]')) add('link', { rel: 'apple-touch-icon', href: 'favicon.svg' });
+  if (!document.querySelector('link[rel="manifest"]')) add('link', { rel: 'manifest', href: 'manifest.json' });
+  if (!document.querySelector('meta[name="theme-color"]')) add('meta', { name: 'theme-color', content: '#0b0e11' });
+})();
+
 const CB_REDIRECT_KEY = "cb_redirect";
 const CB_THEME_KEY = "cb_theme";
 const CB_EMOJIS = ["🦁","🐂","🐻","🦊","🐺","🐯","🦄","🐳","🦈","🐬","🦅","🐉","🚀","💎","🌙","⭐","🔥","🎯","🎨","🧠"];
 
 async function cbCurrentUser() {
-  const sb = await cbSB(); 
-  if (!sb) return null;
-  
-  // Wait for Supabase to check the session
-  const { data: { session }, error } = await sb.auth.getSession();
-  if (error || !session) return null;
-  const user = session.user;
-
-  let profile = null;
   try {
-    const { data } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
-    profile = data;
-  } catch (e) { console.warn("profile fetch failed", e); }
+    const sb = await cbSB(); 
+    if (!sb) return null;
+    
+    const { data: { session }, error } = await sb.auth.getSession();
+    if (error || !session) return null;
+    const user = session.user;
 
-  return {
-    id: user.id,
-    email: user.email || "",
-    name: profile?.name || (user.email ? user.email.split("@")[0] : "Trader"),
-    userId: profile?.user_id || "CB-UNKNOWN",
-    avatarEmoji: profile?.avatar_emoji || "🦁",
-    avatarImage: profile?.avatar_image || null,
-    createdAt: user.created_at
-  };
+    let profile = null;
+    try {
+      const { data } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
+      profile = data;
+    } catch (e) { console.warn("profile fetch failed", e); }
+
+    return {
+      id: user.id,
+      email: user.email || "",
+      name: profile?.name || (user.email ? user.email.split("@")[0] : "Trader"),
+      userId: profile?.user_id || "CB-UNKNOWN",
+      avatarEmoji: profile?.avatar_emoji || "🦁",
+      avatarImage: profile?.avatar_image || null,
+      createdAt: user.created_at
+    };
+  } catch (e) {
+    return null;
+  }
 }
 
 async function cbClearSession() {
@@ -90,6 +106,14 @@ function cbToggleFavorite(id) {
   const f = cbGetFavorites(); const i = f.indexOf(id);
   if (i >= 0) f.splice(i, 1); else f.push(id);
   cbSaveFavorites(f); return f.includes(id);
+}
+function cbGetRecent() { try { return JSON.parse(localStorage.getItem("cb_recent") || "[]"); } catch { return []; } }
+function cbSaveRecent(l) { localStorage.setItem("cb_recent", JSON.stringify(l)); }
+function cbPushRecent(coin) {
+  if (!coin || !coin.id) return;
+  const list = cbGetRecent().filter(c => c.id !== coin.id);
+  list.unshift({ id: coin.id, name: coin.name, symbol: coin.symbol, image: coin.image, price: coin.current_price, change: coin.price_change_percentage_24h });
+  cbSaveRecent(list.slice(0, 5));
 }
 
 function cbFormatPrice(p) {
@@ -140,11 +164,21 @@ async function cbAddNotification(email, notif) {
   const user = await cbCurrentUser(); if (!user) return;
   await sb.from("notifications").insert({ user_id: user.id, type: notif.type, title: notif.title, body: notif.body });
 }
-async function cbUnreadNotificationsCount(email) {
-  const sb = await cbSB(); if (!sb) return 0;
-  const user = await cbCurrentUser(); if (!user) return 0;
-  const { count } = await sb.from("notifications").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false);
-  return count || 0;
+
+async function cbCheckAlerts(coins) {
+  const sb = await cbSB(); if (!sb) return;
+  const user = await cbCurrentUser(); if (!user || !Array.isArray(coins)) return;
+  const alerts = await cbGetAlerts(user.email);
+  const byId = Object.fromEntries(coins.map(c => [c.id, c]));
+  for (const a of alerts) {
+    if (a.triggered) continue;
+    const coin = byId[a.coinId]; if (!coin) continue;
+    const hit = (a.direction === "above" && coin.current_price >= a.targetPrice) || (a.direction === "below" && coin.current_price <= a.targetPrice);
+    if (hit) {
+      await sb.from("alerts").update({ triggered: true }).eq("id", a.id);
+      await cbAddNotification(user.email, { type: "alert", title: `${coin.name} ${a.direction === "above" ? "hit" : "dropped to"} ${cbFormatPrice(a.targetPrice)}`, body: `Current: ${cbFormatPrice(coin.current_price)}` });
+    }
+  }
 }
 
 function cbGetTheme() { return localStorage.getItem(CB_THEME_KEY) || "dark"; }
@@ -170,9 +204,26 @@ function cbRenderAvatarHTML(user, size) {
 
 async function cbLogout() { if (confirm("Log out of CoinBrave?")) { await cbClearSession(); location.href = "index.html"; } }
 
-// Simple nav renderer that waits for auth
+// --- MISSING FUNCTIONS RESTORED ---
+
+function cbEnablePullToRefresh(onRefresh) {
+  let startY = 0, pulling = false, indicator = null;
+  function ensure() { if (indicator) return indicator; indicator = document.createElement("div"); indicator.className = "ptr-indicator"; indicator.innerHTML = '<div class="ptr-spinner"></div>'; document.body.appendChild(indicator); return indicator; }
+  document.addEventListener("touchstart", (e) => { if (window.scrollY <= 0 && !pulling) { startY = e.touches[0].clientY; pulling = true; } }, { passive: true });
+  document.addEventListener("touchmove", (e) => { if (!pulling) return; const dy = e.touches[0].clientY - startY; if (dy > 8) { const ind = ensure(); ind.style.opacity = Math.min(1, dy / 80); ind.style.transform = `translate(-50%, ${Math.min(dy - 30, 30)}px)`; } if (dy > 90) { pulling = false; const ind = ensure(); ind.classList.add("active"); ind.style.opacity = "1"; ind.style.transform = "translate(-50%, 30px)"; Promise.resolve(onRefresh()).finally(() => setTimeout(() => { ind.classList.remove("active"); ind.style.opacity = ""; ind.style.transform = ""; }, 500)); } }, { passive: true });
+  document.addEventListener("touchend", () => { if (pulling) { pulling = false; if (indicator) { indicator.style.opacity = ""; indicator.style.transform = ""; } } }, { passive: true });
+}
+
+function cbRenderFooter() {
+  if (document.querySelector(".cb-footer")) return;
+  const f = document.createElement("footer"); f.className = "cb-footer";
+  f.innerHTML = `<div class="cb-footer-inner"><div class="cb-footer-links"><a href="about.html">About</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="mailto:support@coinbrave.demo">Contact</a></div><div class="cb-footer-copy">© ${new Date().getFullYear()} CoinBrave · Demo project · No real funds</div></div>`;
+  document.body.appendChild(f);
+}
+
 async function cbRenderNav() {
   cbApplyTheme();
+  cbRenderFooter();
   const user = await cbCurrentUser();
   const path = (location.pathname.split("/").pop() || "");
   const isHome = (path === "" || path === "index.html") ? "active" : "";
