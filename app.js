@@ -44,7 +44,7 @@ function renderGreeting(user) {
   if (!user) { wrap.style.display = "none"; return; }
   wrap.style.display = "";
   const name = user.name || user.email || "Trader";
-  const firstName = name.split(" ")[0];
+  const firstName = String(name).split(" ")[0]; // Fix: ensure it is a string
   document.getElementById("greeting").innerHTML = `${getGreeting()}, <span class="name">${firstName}</span> 👋`;
   document.getElementById("greetingSub").textContent = "Here's your portfolio today";
 }
