@@ -1,6 +1,6 @@
-document.addEventListener("DOMContentLoaded", async () => {
-  await cbRenderNav();
-  if (await cbCurrentUser()) { location.href = "index.html"; return; }
+document.addEventListener("DOMContentLoaded", () => {
+  cbRenderNav();
+  if (cbCurrentUser()) { location.href = "index.html"; return; }
 
   const form = document.getElementById("signupForm");
   const errEl = document.getElementById("err");
@@ -19,10 +19,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     strengthLabel.textContent = pw ? s.label : "";
   });
 
-  refInput.addEventListener("input", async () => {
+  refInput.addEventListener("input", () => {
     const code = refInput.value.trim();
     if (!code) { refHint.textContent = ""; return; }
-    const referrer = await cbValidateReferralCode(code);
+    const referrer = cbValidateReferralCode(code);
     if (referrer) {
       refHint.textContent = `✓ Valid code — ${referrer.name.split(" ")[0]} will earn $5 too`;
       refHint.style.color = "var(--up)";
@@ -53,33 +53,32 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     let referrer = null;
     if (refCode) {
-      referrer = await cbValidateReferralCode(refCode);
+      referrer = cbValidateReferralCode(refCode);
       if (!referrer) return showError("Referral code not found. Clear the field or fix the code.");
     }
+
+    const users = cbGetUsers();
+    if (users.some(u => u.email === email)) return showError("An account with this email already exists. Try logging in.");
 
     btn.disabled = true;
     btn.textContent = "Creating…";
 
     try {
-      const { data, error } = await window.sb.auth.signUp({
-        email,
-        password,
-        options: { data: { name } }
-      });
-      if (error) throw error;
-      if (!data.user) throw new Error("Signup failed. Try again.");
+      const passwordHash = await cbHashPassword(password);
+      users.push({ name, email, passwordHash, createdAt: new Date().toISOString() });
+      cbSaveUsers(users);
+      cbSaveWallet(email, cbDefaultWallet());
+      cbSaveAvgPrices(email, cbDefaultAvgPrices());
+      cbSetSession(email);
 
-      if (referrer) {
-        await new Promise(r => setTimeout(r, 800));
-        await cbApplyReferral(email, referrer.email);
-      }
+      if (referrer) cbApplyReferral(email, referrer.email);
 
       const redirect = localStorage.getItem("cb_redirect");
       if (redirect) { localStorage.removeItem("cb_redirect"); location.href = redirect; }
-      else location.href = "index.html"; // Go to home, not wallet
+      else location.href = "index.html";
     } catch (err) {
       console.error(err);
-      showError(err.message || "Something went wrong. Try again.");
+      showError("Something went wrong. Please try again.");
       btn.disabled = false;
       btn.textContent = "Create Account";
     }
