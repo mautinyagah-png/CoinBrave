@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", async () => {
   await cbRenderNav();
-  if (await cbCurrentUser()) { location.href = "wallet.html"; return; }
+  if (await cbCurrentUser()) { location.href = "index.html"; return; }
 
   const form = document.getElementById("signupForm");
   const errEl = document.getElementById("err");
@@ -70,14 +70,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!data.user) throw new Error("Signup failed. Try again.");
 
       if (referrer) {
-        // Wait a moment for triggers to finish creating the wallet
         await new Promise(r => setTimeout(r, 800));
         await cbApplyReferral(email, referrer.email);
       }
 
       const redirect = localStorage.getItem("cb_redirect");
       if (redirect) { localStorage.removeItem("cb_redirect"); location.href = redirect; }
-      else location.href = "wallet.html";
+      else location.href = "index.html"; // Go to home, not wallet
     } catch (err) {
       console.error(err);
       showError(err.message || "Something went wrong. Try again.");
