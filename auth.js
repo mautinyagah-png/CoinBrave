@@ -27,7 +27,6 @@ async function cbSB() {
       document.head.appendChild(s);
     });
     if (!window.sb && window.supabase) {
-      // DIRECT HARDCODE TO PREVENT "MALFORMED URL" ERRORS
       window.sb = window.supabase.createClient(
         "https://yycwsvtxtrqzpjdpnjjb.supabase.co",
         "sb_publishable_b4keaWfThlv9vgxQcMTyGA_e-nwKLRd",
@@ -467,3 +466,12 @@ async function cbAIAnswerFor(topic) {
     default: return "";
   }
 }
+
+// ---- AUTOMATIC NAV LOADING ----
+// This ensures the nav bar loads on EVERY page, exactly once.
+document.addEventListener("DOMContentLoaded", () => {
+  if (!window._cbNavLoaded) {
+    window._cbNavLoaded = true;
+    cbRenderNav();
+  }
+});
