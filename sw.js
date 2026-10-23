@@ -1,4 +1,4 @@
-const CACHE = 'coinbrave-v1';
+const CACHE = 'coinbrave-v2';
 
 self.addEventListener('install', () => { self.skipWaiting(); });
 
