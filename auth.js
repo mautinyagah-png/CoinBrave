@@ -466,12 +466,3 @@ async function cbAIAnswerFor(topic) {
     default: return "";
   }
 }
-
-// ---- AUTOMATIC NAV LOADING ----
-// This ensures the nav bar loads on EVERY page, exactly once.
-document.addEventListener("DOMContentLoaded", () => {
-  if (!window._cbNavLoaded) {
-    window._cbNavLoaded = true;
-    cbRenderNav();
-  }
-});
