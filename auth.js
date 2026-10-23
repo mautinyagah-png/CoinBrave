@@ -27,11 +27,11 @@ async function cbSB() {
       document.head.appendChild(s);
     });
     if (!window.sb && window.supabase) {
-      window.sb = window.supabase.createClient(
-        "https://yycwsvtxtrqzpjdpnjjb.supabase.co",
-        "sb_publishable_b4keaWfThlv9vgxQcMTyGA_e-nwKLRd",
-        { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
-      );
+      const url = window.CB_SUPABASE_URL || "https://yycwsvtxtrqzpjdpnjjb.supabase.co";
+      const key = window.CB_SUPABASE_ANON_KEY || "sb_publishable_b4keaWfThlv9vgxQcMTyGA_e-nwKLRd";
+      window.sb = window.supabase.createClient(url, key, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
     }
     return window.sb;
   })();
