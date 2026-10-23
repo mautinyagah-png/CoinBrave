@@ -4,44 +4,44 @@ let avatarEditOpen = false;
 const PROXY = "https://api.allorigins.win/raw?url=";
 
 document.addEventListener("DOMContentLoaded", async () => {
-  await cbRenderNav();
-  if (!(await cbRequireAuth())) return;
-  user = await cbCurrentUser();
+  cbRenderNav();
+  if (!cbRequireAuth()) return;
+  user = cbCurrentUser();
   renderEmojiGrid();
   renderProfile();
   renderTheme();
   bindProfile();
   bindTheme();
   await loadCoinsForAlerts();
-  await renderAlerts();
+  renderAlerts();
   bindAlerts();
   bindResetWallet();
   bindDeleteAccount();
 });
+
+function saveUser(updated) {
+  const users = cbGetUsers();
+  const idx = users.findIndex(u => u.email === updated.email);
+  if (idx >= 0) { users[idx] = updated; cbSaveUsers(users); }
+  user = updated;
+}
 
 function renderProfile() {
   document.getElementById("nameInput").value = user.name;
   document.getElementById("userIdInput").value = user.userId;
   document.getElementById("avatarPreview").innerHTML = cbRenderAvatarHTML(user, 68);
   document.querySelectorAll(".emoji-cell").forEach(c => c.classList.toggle("selected", c.dataset.emoji === user.avatarEmoji && !user.avatarImage));
-
   const hasAvatar = user.avatarEmoji || user.avatarImage;
   const editArea = document.getElementById("avatarEditArea");
   const penExisting = document.querySelector(".avatar-pen");
   if (penExisting) penExisting.remove();
-
   if (hasAvatar && !avatarEditOpen) {
     const pen = document.createElement("button");
-    pen.className = "avatar-pen";
-    pen.innerHTML = "✏️";
-    pen.title = "Edit avatar";
+    pen.className = "avatar-pen"; pen.innerHTML = "✏️"; pen.title = "Edit avatar";
     pen.addEventListener("click", () => { avatarEditOpen = true; renderProfile(); });
     document.getElementById("avatarPreview").appendChild(pen);
     editArea.classList.remove("show");
-  } else {
-    editArea.classList.add("show");
-  }
-
+  } else { editArea.classList.add("show"); }
   document.getElementById("clearImageBtn").style.display = user.avatarImage ? "block" : "none";
 }
 
@@ -50,46 +50,24 @@ function renderEmojiGrid() {
   grid.innerHTML = CB_EMOJIS.map(e => `<button class="emoji-cell" data-emoji="${e}">${e}</button>`).join("");
   grid.querySelectorAll(".emoji-cell").forEach(cell => {
     cell.addEventListener("click", () => {
-      user.avatarEmoji = cell.dataset.emoji;
-      delete user.avatarImage;
-      avatarEditOpen = true;
-      renderProfile();
+      user.avatarEmoji = cell.dataset.emoji; delete user.avatarImage; avatarEditOpen = true; renderProfile();
     });
   });
 }
 
 function bindProfile() {
-  document.getElementById("saveProfileBtn").addEventListener("click", async () => {
-    const newName = document.getElementById("nameInput").value.trim() || user.name;
-    const updates = {
-      name: newName,
-      avatar_emoji: user.avatarEmoji || "🦁",
-      avatar_image: user.avatarImage || null,
-      updated_at: new Date().toISOString()
-    };
-    const { error } = await window.sb.from("profiles").update(updates).eq("id", user.id);
-    if (error) { alert("Save failed: " + error.message); return; }
-    cbInvalidateUserCache();
-    user = await cbCurrentUser();
-    avatarEditOpen = false;
-    await cbRenderNav();
-    showToast("Profile saved");
-    renderProfile();
+  document.getElementById("saveProfileBtn").addEventListener("click", () => {
+    user.name = document.getElementById("nameInput").value.trim() || user.name;
+    saveUser(user); avatarEditOpen = false; cbRenderNav(); showToast("Profile saved"); renderProfile();
   });
-
   document.getElementById("avatarUpload").addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files[0]; if (!file) return;
     if (file.size > 200 * 1024) { alert("Image too large. Max 200KB."); return; }
     const reader = new FileReader();
     reader.onload = (ev) => { user.avatarImage = ev.target.result; avatarEditOpen = true; renderProfile(); };
     reader.readAsDataURL(file);
   });
-
-  document.getElementById("clearImageBtn").addEventListener("click", () => {
-    delete user.avatarImage;
-    renderProfile();
-  });
+  document.getElementById("clearImageBtn").addEventListener("click", () => { delete user.avatarImage; renderProfile(); });
 }
 
 function renderTheme() {
@@ -117,52 +95,36 @@ async function loadCoinsForAlerts() {
 }
 
 function bindAlerts() {
-  document.getElementById("addAlertBtn").addEventListener("click", async () => {
+  document.getElementById("addAlertBtn").addEventListener("click", () => {
     const coinId = document.getElementById("alertCoin").value;
     const direction = document.getElementById("alertDirection").value;
     const price = parseFloat(document.getElementById("alertPrice").value);
     if (!coinId || !price || price <= 0) return alert("Choose a coin and enter a valid target price.");
     const coin = allCoins.find(c => c.id === coinId);
-    await cbAddAlert(user.email, { coinId, coinName: coin?.name || coinId, coinSymbol: coin?.symbol || "", direction, targetPrice: price });
-    document.getElementById("alertPrice").value = "";
-    await renderAlerts();
-    showToast("Alert created");
+    cbAddAlert(user.email, { coinId, coinName: coin?.name || coinId, coinSymbol: coin?.symbol || "", direction, targetPrice: price });
+    document.getElementById("alertPrice").value = ""; renderAlerts(); showToast("Alert created");
   });
 }
 
-async function renderAlerts() {
+function renderAlerts() {
   const list = document.getElementById("alertList");
-  const alerts = await cbGetAlerts(user.email);
+  const alerts = cbGetAlerts(user.email);
   if (!alerts.length) { list.innerHTML = `<div class="empty"><span class="emoji">🔕</span>No alerts yet.</div>`; return; }
-  list.innerHTML = alerts.map(a => `
-    <div class="alert-row">
-      <div class="info">
-        <div class="title">${a.coinName} ${a.direction} ${cbFormatPrice(a.targetPrice)}</div>
-        <div class="sub">${a.triggered ? "Triggered" : "Active"} · ${new Date(a.createdAt).toLocaleDateString()}</div>
-      </div>
-      ${a.triggered ? `<span class="triggered">✓ Hit</span>` : ""}
-      <button class="remove-btn" data-id="${a.id}">Remove</button>
-    </div>`).join("");
+  list.innerHTML = alerts.map(a => `<div class="alert-row"><div class="info"><div class="title">${a.coinName} ${a.direction} ${cbFormatPrice(a.targetPrice)}</div><div class="sub">${a.triggered ? "Triggered" : "Active"} · ${new Date(a.createdAt).toLocaleDateString()}</div></div>${a.triggered ? `<span class="triggered">✓ Hit</span>` : ""}<button class="remove-btn" data-id="${a.id}">Remove</button></div>`).join("");
   list.querySelectorAll(".remove-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      await cbRemoveAlert(user.email, btn.dataset.id);
-      await renderAlerts();
-    });
+    btn.addEventListener("click", () => { cbRemoveAlert(user.email, btn.dataset.id); renderAlerts(); });
   });
 }
 
 function bindResetWallet() {
-  document.getElementById("resetWalletBtn").addEventListener("click", async () => {
-    if (await cbResetWallet(user.email)) {
-      showToast("Wallet reset to $5,000 + starter coins");
-      setTimeout(() => location.href = "wallet.html", 900);
-    }
+  document.getElementById("resetWalletBtn").addEventListener("click", () => {
+    if (cbResetWallet(user.email)) { showToast("Wallet reset to $5,000 + starter coins"); setTimeout(() => location.href = "wallet.html", 900); }
   });
 }
 
 function bindDeleteAccount() {
-  document.getElementById("deleteAccountBtn").addEventListener("click", async () => {
-    if (await cbDeleteAccount(user.email)) location.href = "index.html";
+  document.getElementById("deleteAccountBtn").addEventListener("click", () => {
+    if (cbDeleteAccount(user.email)) location.href = "index.html";
   });
 }
 
