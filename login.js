@@ -1,6 +1,5 @@
 document.addEventListener("DOMContentLoaded", async () => {
   await cbRenderNav();
-  if (await cbCurrentUser()) { location.href = "index.html"; return; }
 
   const form = document.getElementById("loginForm");
   const errEl = document.getElementById("err");
@@ -33,7 +32,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       cbInvalidateUserCache();
       const redirect = localStorage.getItem("cb_redirect");
       if (redirect) { localStorage.removeItem("cb_redirect"); location.href = redirect; }
-      else location.href = "index.html"; // Go to home, not wallet
+      else location.href = "index.html";
     } catch (err) {
       console.error(err);
       btn.disabled = false;
