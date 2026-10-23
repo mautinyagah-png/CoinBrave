@@ -1,8 +1,7 @@
 // ============================================================
-// CoinBrave auth.js — LOCAL STORAGE VERSION (STABLE)
+// CoinBrave auth.js — LOCAL STORAGE + LIMIT ORDERS
 // ============================================================
 
-// ---- auto-inject head + footer ----
 (function cbInject() {
   if (typeof document === 'undefined') return;
   const add = (tag, attrs) => { const el = document.createElement(tag); Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v)); document.head.appendChild(el); };
@@ -28,7 +27,8 @@ const CB_HISTORY_PREFIX= "cb_history_";
 const CB_THEME_KEY     = "cb_theme";
 const CB_REWARDS_PREFIX= "cb_rewards_";
 const CB_RECENT_KEY    = "cb_recent";
-const CB_LOGIN_ATTEMPTS= "cb_login_attempts";
+const CB_LIMIT_PREFIX  = "cb_limit_orders_";
+const CB_2FA_PREFIX    = "cb_2fa_";
 
 const CB_EMOJIS = ["🦁","🐂","🐻","🦊","🐺","🐯","🦄","🐳","🦈","🐬","🦅","🐉","🚀","💎","🌙","⭐","🔥","🎯","🎨","🧠"];
 
@@ -61,28 +61,17 @@ function cbEnsureUserFields(user) {
 function cbGetWallet(email) { try { return JSON.parse(localStorage.getItem(CB_WALLET_PREFIX + email) || "null"); } catch { return null; } }
 function cbSaveWallet(email, w) { localStorage.setItem(CB_WALLET_PREFIX + email, JSON.stringify(w)); }
 
-function cbDefaultWallet() {
-  return { usd: 5000, bitcoin: 0.03, ethereum: 0.5, solana: 5, dogecoin: 5000, cardano: 1000, chainlink: 10 };
-}
-function cbDefaultAvgPrices() {
-  return { bitcoin: 82497, ethereum: 2430, solana: 104.55, dogecoin: 0.08, cardano: 0.218, chainlink: 12.17 };
-}
+function cbDefaultWallet() { return { usd: 5000, bitcoin: 0.03, ethereum: 0.5, solana: 5, dogecoin: 5000, cardano: 1000, chainlink: 10 }; }
+function cbDefaultAvgPrices() { return { bitcoin: 82497, ethereum: 2430, solana: 104.55, dogecoin: 0.08, cardano: 0.218, chainlink: 12.17 }; }
 
 function cbGetAvgPrices(email) { try { return JSON.parse(localStorage.getItem(CB_AVG_PREFIX + email) || "{}"); } catch { return {}; } }
 function cbSaveAvgPrices(email, obj) { localStorage.setItem(CB_AVG_PREFIX + email, JSON.stringify(obj)); }
-
 function cbUpdateAvgOnBuy(email, coinId, qty, price) {
-  const avg = cbGetAvgPrices(email);
-  const wallet = cbGetWallet(email) || {};
-  const oldQty = wallet[coinId] || 0;
-  const oldAvg = avg[coinId] || 0;
-  const totalOld = oldQty * oldAvg;
-  const totalNew = qty * price;
-  const newQty = oldQty + qty;
-  if (newQty > 0) avg[coinId] = (totalOld + totalNew) / newQty;
+  const avg = cbGetAvgPrices(email), wallet = cbGetWallet(email) || {};
+  const oldQty = wallet[coinId] || 0, oldAvg = avg[coinId] || 0;
+  if (oldQty + qty > 0) avg[coinId] = ((oldQty * oldAvg) + (qty * price)) / (oldQty + qty);
   cbSaveAvgPrices(email, avg);
 }
-
 function cbUpdateAvgOnSell(email, coinId) {
   const wallet = cbGetWallet(email) || {};
   const avg = cbGetAvgPrices(email);
@@ -107,20 +96,6 @@ function cbPasswordStrength(pw) {
   return { level: "strong", label: "Strong", score: 3 };
 }
 
-function cbGetLoginAttempts() { try { return JSON.parse(localStorage.getItem(CB_LOGIN_ATTEMPTS) || "{}"); } catch { return {}; } }
-function cbRecordFailedAttempt(email) { const attempts = cbGetLoginAttempts(); attempts[email] = (attempts[email] || 0) + 1; localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts)); return attempts[email]; }
-function cbResetLoginAttempts(email) { const attempts = cbGetLoginAttempts(); delete attempts[email]; delete attempts[email + "_until"]; localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts)); }
-function cbIsLockedOut(email) {
-  const attempts = cbGetLoginAttempts(); const count = attempts[email] || 0;
-  if (count >= 3) {
-    if (!attempts[email + "_until"] || Date.now() > attempts[email + "_until"]) { attempts[email + "_until"] = Date.now() + 30 * 1000; localStorage.setItem(CB_LOGIN_ATTEMPTS, JSON.stringify(attempts)); }
-    const remaining = Math.ceil((attempts[email + "_until"] - Date.now()) / 1000);
-    if (remaining > 0) return remaining;
-    else { cbResetLoginAttempts(email); return 0; }
-  }
-  return 0;
-}
-
 function cbGetFavorites() { try { return JSON.parse(localStorage.getItem(CB_FAV_KEY) || "[]"); } catch { return []; } }
 function cbSaveFavorites(l) { localStorage.setItem(CB_FAV_KEY, JSON.stringify(l)); }
 function cbToggleFavorite(id) { const f = cbGetFavorites(); const i = f.indexOf(id); if (i >= 0) f.splice(i, 1); else f.push(id); cbSaveFavorites(f); return f.includes(id); }
@@ -128,12 +103,7 @@ function cbGetRecent() { try { return JSON.parse(localStorage.getItem(CB_RECENT_
 function cbSaveRecent(l) { localStorage.setItem(CB_RECENT_KEY, JSON.stringify(l)); }
 function cbPushRecent(coin) { if (!coin || !coin.id) return; const list = cbGetRecent().filter(c => c.id !== coin.id); list.unshift({ id: coin.id, name: coin.name, symbol: coin.symbol, image: coin.image, price: coin.current_price, change: coin.price_change_percentage_24h }); cbSaveRecent(list.slice(0, 5)); }
 
-function cbFormatPrice(p) {
-  if (p == null || isNaN(p)) return "—";
-  if (p >= 1) return "$" + p.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  if (p >= 0.01) return "$" + p.toFixed(4);
-  return "$" + p.toFixed(6);
-}
+function cbFormatPrice(p) { if (p == null || isNaN(p)) return "—"; if (p >= 1) return "$" + p.toLocaleString(undefined, { maximumFractionDigits: 2 }); if (p >= 0.01) return "$" + p.toFixed(4); return "$" + p.toFixed(6); }
 function cbFormatSigned(n, decimals) { const d = decimals == null ? 2 : decimals; const sign = n >= 0 ? "+" : "-"; return sign + "$" + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d }); }
 function cbSparkline(prices, width, height, up) { width = width || 60; height = height || 24; if (!prices || prices.length < 2) return ""; const min = Math.min(...prices), max = Math.max(...prices); const range = max - min || 1; const step = width / (prices.length - 1); const pts = prices.map((p, i) => `${(i * step).toFixed(1)},${(height - ((p - min) / range) * (height - 4) - 2).toFixed(1)}`).join(" "); const color = up ? "var(--up)" : "var(--down)"; return `<svg class="sparkline" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>`; }
 
@@ -141,14 +111,68 @@ function cbGetTransactions(email) { try { return JSON.parse(localStorage.getItem
 function cbSaveTransactions(email, l) { localStorage.setItem(CB_TX_PREFIX + email, JSON.stringify(l)); }
 function cbAddTransaction(email, tx) { const list = cbGetTransactions(email); tx.id = "tx_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6); tx.timestamp = new Date().toISOString(); list.unshift(tx); cbSaveTransactions(email, list); return tx; }
 
+// --- LIMIT ORDERS ---
+function cbGetLimitOrders(email) { try { return JSON.parse(localStorage.getItem(CB_LIMIT_PREFIX + email) || "[]"); } catch { return []; } }
+function cbSaveLimitOrders(email, l) { localStorage.setItem(CB_LIMIT_PREFIX + email, JSON.stringify(l)); }
+function cbAddLimitOrder(email, order) { const l = cbGetLimitOrders(email); order.id = "lo_" + Date.now(); l.unshift(order); cbSaveLimitOrders(email, l); }
+function cbRemoveLimitOrder(email, id) { cbSaveLimitOrders(email, cbGetLimitOrders(email).filter(o => o.id !== id)); }
+
+function cbCheckLimitOrders(marketCoins) {
+  const user = cbCurrentUser();
+  if (!user || !Array.isArray(marketCoins)) return;
+  let orders = cbGetLimitOrders(user.email);
+  let changed = false;
+
+  for (const order of orders) {
+    const coin = marketCoins.find(c => c.id === order.coinId);
+    if (!coin) continue;
+
+    let hit = false;
+    if (order.side === "buy" && coin.current_price <= order.targetPrice) hit = true;
+    if (order.side === "sell" && coin.current_price >= order.targetPrice) hit = true;
+
+    if (hit) {
+      const wallet = cbGetWallet(user.email) || {};
+      const fee = (order.amount * coin.current_price) * 0.001;
+      const total = (order.amount * coin.current_price);
+      const totalWithFee = total + fee;
+
+      if (order.side === "buy" && wallet.usd >= totalWithFee) {
+        wallet.usd -= totalWithFee;
+        wallet[order.coinId] = (wallet[order.coinId] || 0) + order.amount;
+        cbSaveWallet(user.email, wallet);
+        cbUpdateAvgOnBuy(user.email, order.coinId, order.amount, coin.current_price);
+        cbAddTransaction(user.email, { type: "buy", coinId: coin.id, coinName: coin.name, coinSymbol: coin.symbol, coinImage: coin.image, amount: order.amount, price: coin.current_price, total: total, fee: fee });
+        cbAddNotification(user.email, { type: "trade", title: `Limit Buy Filled: ${order.amount} ${coin.symbol.toUpperCase()}`, body: `Target: ${cbFormatPrice(order.targetPrice)} | Filled: ${cbFormatPrice(coin.current_price)}` });
+        cbRemoveLimitOrder(user.email, order.id);
+        changed = true;
+      } else if (order.side === "sell" && (wallet[order.coinId] || 0) >= order.amount) {
+        wallet[order.coinId] -= order.amount;
+        if (wallet[order.coinId] <= 0) delete wallet[order.coinId];
+        wallet.usd += (total - fee);
+        cbSaveWallet(user.email, wallet);
+        cbUpdateAvgOnSell(user.email, order.coinId);
+        cbAddTransaction(user.email, { type: "sell", coinId: coin.id, coinName: coin.name, coinSymbol: coin.symbol, coinImage: coin.image, amount: order.amount, price: coin.current_price, total: total, fee: fee });
+        cbAddNotification(user.email, { type: "trade", title: `Limit Sell Filled: ${order.amount} ${coin.symbol.toUpperCase()}`, body: `Target: ${cbFormatPrice(order.targetPrice)} | Filled: ${cbFormatPrice(coin.current_price)}` });
+        cbRemoveLimitOrder(user.email, order.id);
+        changed = true;
+      }
+    }
+  }
+}
+
+function cbGet2FA(email) { return localStorage.getItem(CB_2FA_PREFIX + email) === "true"; }
+function cbSet2FA(email, val) { localStorage.setItem(CB_2FA_PREFIX + email, val); }
+
+// --- ALERTS, NOTIFICATIONS, HISTORY ---
 function cbGetAlerts(email) { try { return JSON.parse(localStorage.getItem(CB_ALERTS_PREFIX + email) || "[]"); } catch { return []; } }
 function cbSaveAlerts(email, l) { localStorage.setItem(CB_ALERTS_PREFIX + email, JSON.stringify(l)); }
-function cbAddAlert(email, a) { const l = cbGetAlerts(email); a.id = "al_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6); a.createdAt = new Date().toISOString(); a.triggered = false; l.unshift(a); cbSaveAlerts(email, l); return a; }
+function cbAddAlert(email, a) { const l = cbGetAlerts(email); a.id = "al_" + Date.now(); a.createdAt = new Date().toISOString(); a.triggered = false; l.unshift(a); cbSaveAlerts(email, l); return a; }
 function cbRemoveAlert(email, id) { cbSaveAlerts(email, cbGetAlerts(email).filter(a => a.id !== id)); }
 
 function cbGetNotifications(email) { try { return JSON.parse(localStorage.getItem(CB_NOTIF_PREFIX + email) || "[]"); } catch { return []; } }
 function cbSaveNotifications(email, l) { localStorage.setItem(CB_NOTIF_PREFIX + email, JSON.stringify(l)); }
-function cbAddNotification(email, n) { const l = cbGetNotifications(email); n.id = "n_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6); n.timestamp = new Date().toISOString(); n.read = false; l.unshift(n); cbSaveNotifications(email, l); cbUpdateBellBadge(); }
+function cbAddNotification(email, n) { const l = cbGetNotifications(email); n.id = "n_" + Date.now(); n.timestamp = new Date().toISOString(); n.read = false; l.unshift(n); cbSaveNotifications(email, l); cbUpdateBellBadge(); }
 function cbMarkNotificationsRead(email) { cbSaveNotifications(email, cbGetNotifications(email).map(n => ({ ...n, read: true }))); cbUpdateBellBadge(); }
 function cbUnreadNotificationsCount(email) { return cbGetNotifications(email).filter(n => !n.read).length; }
 
@@ -214,50 +238,34 @@ function cbDeleteAccount(email) {
   if (!confirm("Delete your account PERMANENTLY?\n\nAll your wallet, trades, alerts, and settings will be erased forever. This cannot be undone.")) return false;
   const typed = prompt('Type DELETE (all caps) to confirm:');
   if (typed !== "DELETE") { alert("Cancelled. Account not deleted."); return false; }
-  const users = cbGetUsers().filter(u => u.email !== email);
-  cbSaveUsers(users);
-  localStorage.removeItem(CB_WALLET_PREFIX + email);
-  localStorage.removeItem(CB_AVG_PREFIX + email);
-  localStorage.removeItem(CB_TX_PREFIX + email);
-  localStorage.removeItem(CB_ALERTS_PREFIX + email);
-  localStorage.removeItem(CB_NOTIF_PREFIX + email);
-  localStorage.removeItem(CB_HISTORY_PREFIX + email);
-  localStorage.removeItem(CB_REWARDS_PREFIX + email);
-  cbClearSession();
-  return true;
+  const users = cbGetUsers().filter(u => u.email !== email); cbSaveUsers(users);
+  localStorage.removeItem(CB_WALLET_PREFIX + email); localStorage.removeItem(CB_AVG_PREFIX + email);
+  localStorage.removeItem(CB_TX_PREFIX + email); localStorage.removeItem(CB_ALERTS_PREFIX + email);
+  localStorage.removeItem(CB_NOTIF_PREFIX + email); localStorage.removeItem(CB_HISTORY_PREFIX + email);
+  localStorage.removeItem(CB_REWARDS_PREFIX + email); localStorage.removeItem(CB_LIMIT_PREFIX + email);
+  cbClearSession(); return true;
 }
 
 function cbResetWallet(email) {
   if (!confirm("Reset your demo wallet?\n\nYour cash returns to $5,000 and your starter coins are restored. All transactions and averages are cleared. Your account and alerts stay.")) return false;
-  cbSaveWallet(email, cbDefaultWallet());
-  cbSaveAvgPrices(email, cbDefaultAvgPrices());
-  localStorage.removeItem(CB_TX_PREFIX + email);
-  localStorage.removeItem(CB_HISTORY_PREFIX + email);
+  cbSaveWallet(email, cbDefaultWallet()); cbSaveAvgPrices(email, cbDefaultAvgPrices());
+  localStorage.removeItem(CB_TX_PREFIX + email); localStorage.removeItem(CB_HISTORY_PREFIX + email); localStorage.removeItem(CB_LIMIT_PREFIX + email);
   cbAddTransaction(email, { type: "deposit", total: 5000, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
-  cbAddNotification(email, { type: "deposit", title: "Wallet reset", body: "Demo wallet restored to $5,000 + starter coins." });
-  return true;
+  cbAddNotification(email, { type: "deposit", title: "Wallet reset", body: "Demo wallet restored to $5,000 + starter coins." }); return true;
 }
 
 function cbValidateReferralCode(code) {
-  if (!code) return null;
-  const normalized = code.trim().toUpperCase();
-  if (!normalized) return null;
-  const users = cbGetUsers();
-  const referrer = users.find(u => { const refCode = (u.userId || "").replace(/^CB-/, "REF-"); return refCode === normalized; });
-  return referrer || null;
+  if (!code) return null; const normalized = code.trim().toUpperCase(); if (!normalized) return null;
+  const users = cbGetUsers(); return users.find(u => { const refCode = (u.userId || "").replace(/^CB-/, "REF-"); return refCode === normalized; }) || null;
 }
-
 function cbApplyReferral(newUserEmail, referrerEmail) {
   if (!newUserEmail || !referrerEmail || newUserEmail === referrerEmail) return;
-  const bonus = 5;
-  const newWallet = cbGetWallet(newUserEmail) || cbDefaultWallet();
-  newWallet.usd = +((newWallet.usd || 0) + bonus).toFixed(2);
-  cbSaveWallet(newUserEmail, newWallet);
+  const bonus = 5; const newWallet = cbGetWallet(newUserEmail) || cbDefaultWallet();
+  newWallet.usd = +((newWallet.usd || 0) + bonus).toFixed(2); cbSaveWallet(newUserEmail, newWallet);
   cbAddTransaction(newUserEmail, { type: "deposit", total: bonus, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
   cbAddNotification(newUserEmail, { type: "reward", title: `Welcome bonus +$${bonus}`, body: "Referral bonus applied." });
   const refWallet = cbGetWallet(referrerEmail) || cbDefaultWallet();
-  refWallet.usd = +((refWallet.usd || 0) + bonus).toFixed(2);
-  cbSaveWallet(referrerEmail, refWallet);
+  refWallet.usd = +((refWallet.usd || 0) + bonus).toFixed(2); cbSaveWallet(referrerEmail, refWallet);
   cbAddTransaction(referrerEmail, { type: "deposit", total: bonus, coinId: "usd", coinName: "USD", coinSymbol: "USD" });
   cbAddNotification(referrerEmail, { type: "reward", title: `Referral bonus +$${bonus}`, body: "Someone signed up with your code." });
 }
@@ -268,7 +276,6 @@ function cbRenderFooter() {
   f.innerHTML = `<div class="cb-footer-inner"><div class="cb-footer-links"><a href="about.html">About</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="mailto:support@coinbrave.demo">Contact</a></div><div class="cb-footer-copy">© ${new Date().getFullYear()} CoinBrave · Demo project · No real funds</div></div>`;
   document.body.appendChild(f);
 }
-
 function cbEnablePullToRefresh(onRefresh) {
   let startY = 0, pulling = false, indicator = null;
   function ensure() { if (indicator) return indicator; indicator = document.createElement("div"); indicator.className = "ptr-indicator"; indicator.innerHTML = '<div class="ptr-spinner"></div>'; document.body.appendChild(indicator); return indicator; }
@@ -279,15 +286,12 @@ function cbEnablePullToRefresh(onRefresh) {
 
 async function cbGetMarketForFunds() {
   const url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=false";
-  let res = await fetch(url);
-  if (!res.ok) res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
-  if (!res.ok) throw new Error("Failed to load market");
-  return await res.json();
+  let res = await fetch(url); if (!res.ok) res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
+  if (!res.ok) throw new Error("Failed to load market"); return await res.json();
 }
 
 async function cbOpenFundsModal(mode, onSuccess) {
-  const user = cbCurrentUser();
-  if (!user) { location.href = "signup.html"; return; }
+  const user = cbCurrentUser(); if (!user) { location.href = "signup.html"; return; }
   let existing = document.getElementById("cbFundsModal"); if (existing) existing.remove();
   const modal = document.createElement("div"); modal.id = "cbFundsModal"; modal.className = "modal-overlay hidden";
   modal.innerHTML = `<div class="modal"><div class="modal-header"><h3>${mode === "deposit" ? "Deposit" : "Withdraw"}</h3><button class="modal-close" id="cbFundsClose">×</button></div><div class="modal-body"><div class="form-group"><label>Asset</label><select id="cbFundsAsset"><option value="usd">USD (Cash)</option></select></div><div class="form-group"><label>Amount</label><input id="cbFundsAmount" type="number" step="any" min="0" placeholder="0.00" /></div><div id="cbFundsInfo" class="muted" style="font-size:0.85rem;margin-bottom:12px"></div><div id="cbFundsError" class="form-error"></div></div><div class="modal-footer"><button id="cbFundsConfirm" class="btn-primary">Confirm ${mode === "deposit" ? "Deposit" : "Withdrawal"}</button></div></div>`;
@@ -315,12 +319,9 @@ async function cbOpenFundsModal(mode, onSuccess) {
 }
 
 function cbRenderNav() {
-  cbApplyTheme();
-  cbRenderFooter();
-  const user = cbCurrentUser();
-  const path = (location.pathname.split("/").pop() || "");
-  const isHome = (path === "" || path === "index.html") ? "active" : "";
-  const is = (p) => path === p ? "active" : "";
+  cbApplyTheme(); cbRenderFooter();
+  const user = cbCurrentUser(); const path = (location.pathname.split("/").pop() || "");
+  const isHome = (path === "" || path === "index.html") ? "active" : ""; const is = (p) => path === p ? "active" : "";
   const unread = user ? cbUnreadNotificationsCount(user.email) : 0;
 
   const nav = document.querySelector(".nav");
