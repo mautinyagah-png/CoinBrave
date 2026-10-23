@@ -1,12 +1,6 @@
-document.addEventListener("DOMContentLoaded", async () => {
-  await cbRenderNav();
-
-  // If already logged in, instantly send them to home
-  const user = await cbCurrentUser();
-  if (user) { 
-    location.href = "index.html"; 
-    return; 
-  }
+document.addEventListener("DOMContentLoaded", () => {
+  cbRenderNav();
+  if (cbCurrentUser()) { location.href = "index.html"; return; }
 
   const form = document.getElementById("loginForm");
   const errEl = document.getElementById("err");
@@ -21,18 +15,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     const email = document.getElementById("email").value.trim().toLowerCase();
     const password = document.getElementById("password").value;
 
+    const lockRemaining = cbIsLockedOut(email);
+    if (lockRemaining > 0) return showError(`Too many failed attempts. Try again in ${lockRemaining}s.`);
+
+    const user = cbGetUsers().find(u => u.email === email);
+    if (!user) {
+      const count = cbRecordFailedAttempt(email);
+      if (count >= 3) return showError("Too many failed attempts. Wait 30 seconds before trying again.");
+      return showError("No account found with that email.");
+    }
+
     btn.disabled = true;
     btn.textContent = "Logging in…";
 
     try {
-      const { data, error } = await window.sb.auth.signInWithPassword({ email, password });
-      if (error) {
+      const hash = await cbHashPassword(password);
+      if (hash !== user.passwordHash) {
+        const count = cbRecordFailedAttempt(email);
         btn.disabled = false;
         btn.textContent = "Log In";
-        return showError(error.message);
+        if (count >= 3) return showError("Too many failed attempts. Wait 30 seconds before trying again.");
+        return showError(`Incorrect password. ${3 - count} attempt${3 - count === 1 ? "" : "s"} remaining.`);
       }
-      // Success! Go home.
-      location.href = "index.html";
+      cbResetLoginAttempts(email);
+      cbSetSession(email);
+      const redirect = localStorage.getItem("cb_redirect");
+      if (redirect) { localStorage.removeItem("cb_redirect"); location.href = redirect; }
+      else location.href = "index.html";
     } catch (err) {
       console.error(err);
       btn.disabled = false;
