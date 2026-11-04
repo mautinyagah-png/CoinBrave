@@ -4,7 +4,6 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: v
 .muted { color: var(--text-muted); }
 a { color: var(--accent); text-decoration: none; }
 
-/* Top Navigation */
 .topbar { display: flex; justify-content: space-between; align-items: center; padding: 14px 24px; background: var(--bg-elev); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; gap: 16px; }
 .logo { display: flex; align-items: center; gap: 8px; font-size: 1.25rem; font-weight: 700; color: var(--accent); flex-shrink: 0; user-select: none; cursor: pointer; }
 .nav { display: flex; gap: 20px; align-items: center; }
@@ -15,7 +14,6 @@ a { color: var(--accent); text-decoration: none; }
 .topbar-user { display: none; gap: 8px; align-items: center; }
 .avatar-emoji { line-height: 1; display: inline-block; }
 
-/* Main Layout */
 .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 20px; padding-bottom: 40px; }
 .panel { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 .panel h2 { font-size: 1.1rem; margin-bottom: 16px; color: var(--accent); }
@@ -30,9 +28,8 @@ a { color: var(--accent); text-decoration: none; }
 .stat-card .value.gold { color: var(--accent); }
 .stat-card .sub { font-size: 0.85rem; margin-top: 6px; color: var(--text-muted); }
 
-/* Force Coin Icons to be small */
+/* Forced Icon Sizes */
 .coin-row { display: grid; grid-template-columns: 24px 32px 1fr 68px 1fr auto; align-items: center; gap: 12px; padding: 12px 8px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
-.coin-row:last-child { border-bottom: none; }
 .coin-row:hover { background: var(--bg-hover); }
 .coin-row img { width: 26px !important; height: 26px !important; border-radius: 50%; object-fit: contain; }
 .coin-row .name { font-weight: 500; font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -41,12 +38,12 @@ a { color: var(--accent); text-decoration: none; }
 
 /* Holdings Row */
 .holding-row { display: grid; grid-template-columns: 32px 2fr 1fr 1fr; align-items: center; padding: 14px 8px; border-bottom: 1px solid var(--border); gap: 12px; }
-.holding-row:last-child { border-bottom: none; }
 .holding-row img { width: 30px !important; height: 30px !important; border-radius: 50%; object-fit: contain; }
 .holding-row .info .name { font-weight: 500; }
 .holding-row .info .amount { font-size: 0.85rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .holding-row .value { text-align: right; font-variant-numeric: tabular-nums; }
 .holding-row .value .usd { font-weight: 600; }
+.holding-row .value .price-small { font-size: 0.8rem; color: var(--text-muted); }
 
 /* Modals */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; backdrop-filter: blur(4px); }
@@ -56,12 +53,10 @@ a { color: var(--accent); text-decoration: none; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--border); }
 .modal-header h3 { font-size: 1.15rem; color: var(--text); font-weight: 700; }
 .modal-close { background: var(--bg-hover); border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
-.modal-close:hover { color: var(--text); background: var(--border-soft); }
 .modal-body { padding: 24px; max-height: 75vh; overflow-y: auto; }
 
 /* Breakdown List */
 .breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
-.breakdown-row:last-child { border-bottom: none; }
 .b-asset { display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 0.95rem; }
 .b-asset img { border-radius: 50%; width: 20px !important; height: 20px !important; object-fit: contain; }
 .b-value { font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -69,14 +64,12 @@ a { color: var(--accent); text-decoration: none; }
 
 /* Buttons */
 .btn-primary { width: 100%; background: var(--accent); color: var(--on-accent); border: none; padding: 12px; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; font-family: inherit; }
-.btn-primary:hover { opacity: 0.9; }
 .btn-outline { background: transparent; border: 1px solid var(--border-soft); color: var(--text); padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.15s; }
 .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
 .funds-actions { display: flex; gap: 10px; margin-bottom: 20px; }
 .funds-actions button { flex: 1; padding: 14px; border-radius: 10px; font-weight: 700; font-size: 0.95rem; cursor: pointer; border: none; font-family: inherit; transition: opacity 0.15s; }
 .funds-actions .btn-deposit { background: var(--accent); color: var(--on-accent); }
 .funds-actions .btn-withdraw { background: var(--bg-elev); color: var(--text); border: 1px solid var(--border-soft); }
-.funds-actions .btn-withdraw:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Calendar */
 .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; margin-top: 10px; }
@@ -103,27 +96,24 @@ a { color: var(--accent); text-decoration: none; }
 .down { color: var(--down); }
 .fav-btn { background: none; border: none; color: var(--border-soft); font-size: 1.1rem; cursor: pointer; padding: 2px; transition: color 0.15s; line-height: 1; }
 .fav-btn.active { color: var(--accent); }
+.error-box { color: var(--down); background: rgba(246,70,93,0.08); border: 1px solid rgba(246,70,93,0.3); padding: 14px 16px; border-radius: 8px; font-size: 0.9rem; }
 
 /* Footer */
 .cb-footer { border-top: 1px solid var(--border); background: var(--bg-elev); margin-top: 40px; }
 .cb-footer-inner { max-width: 1200px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center; }
 .cb-footer-links { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; font-size: 0.88rem; }
 .cb-footer-links a { color: var(--text-muted); }
-.cb-footer-links a:hover { color: var(--accent); }
 .cb-footer-copy { font-size: 0.78rem; color: var(--text-muted); }
 
-/* Mobile Support */
 @media (max-width: 800px) {
   .topbar { padding: 12px 16px; }
   .topbar .nav { display: none; }
   .topbar-user { display: flex; }
   .container { margin: 16px auto; gap: 16px; padding: 0 12px; padding-bottom: 24px; }
-  .panel { padding: 16px; }
   .wallet-hero { grid-template-columns: 1fr; }
   .funds-actions { flex-direction: column; }
   .coin-row { grid-template-columns: 22px 28px 1fr auto auto; gap: 6px; font-size: 0.88rem; }
   .coin-row img { width: 24px !important; height: 24px !important; }
-  .coin-row .price { display: block; font-size: 0.85rem; font-weight: 600; }
   .holding-row { grid-template-columns: 28px 1fr 1fr; font-size: 0.88rem; }
   .holding-row img { width: 26px !important; height: 26px !important; }
   .modal { max-height: 90vh; }
