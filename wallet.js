@@ -2,11 +2,19 @@ const API   = "https://api.coingecko.com/api/v3/coins/markets";
 const QUERY = "?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false";
 const URL   = API + QUERY;
 const PROXY = "https://api.allorigins.win/raw?url=";
+const DONUT_COLORS = ["#f0b90b","#0ecb81","#f6465d","#3f88f0","#a855f7","#ff7a00","#00b8d4","#e91e63"];
+
+let currentCalendarDate = new Date();
+let userPortfolioTotal = 0;
+let userCash = 0;
+let currentMarketData = [];
 
 document.addEventListener("DOMContentLoaded", async () => {
   cbRenderNav();
   if (!cbRequireAuth()) return;
   bindFundsActions();
+  bindCardToggles();
+  bindCalendarEvents();
   cbEnablePullToRefresh(initWallet);
   renderSkeletons();
   await initWallet();
@@ -22,6 +30,28 @@ function handleQueryParams() {
 function bindFundsActions() {
   document.getElementById("depositBtn").addEventListener("click", () => cbOpenFundsModal("deposit", initWallet));
   document.getElementById("withdrawBtn").addEventListener("click", () => cbOpenFundsModal("withdraw", initWallet));
+}
+
+// --- NEW: Card Toggles ---
+function bindCardToggles() {
+  document.getElementById("cardTotal").addEventListener("click", function(e) {
+    if(e.target.tagName === 'BUTTON') return;
+    this.classList.toggle("expanded");
+  });
+  document.getElementById("cardCash").addEventListener("click", function(e) {
+    if(e.target.tagName === 'BUTTON') return;
+    this.classList.toggle("expanded");
+  });
+  document.getElementById("cardPL").addEventListener("click", function(e) {
+    if(e.target.id === 'openCalendarBtn') return;
+    this.classList.toggle("expanded");
+  });
+
+  document.getElementById("openCalendarBtn").addEventListener("click", (e) => {
+    e.stopPropagation(); // Prevent card from closing
+    document.getElementById("calendarModal").classList.remove("hidden");
+    renderCalendar();
+  });
 }
 
 function renderSkeletons() {
@@ -42,6 +72,7 @@ async function initWallet() {
     if (!res.ok) res = await fetch(PROXY + encodeURIComponent(URL));
     if (!res.ok) throw new Error(`API error ${res.status}`);
     market = await res.json();
+    currentMarketData = market; // Save for breakdown
     cbCheckAlerts(market);
   } catch (err) {
     console.error(err);
@@ -50,8 +81,8 @@ async function initWallet() {
   }
 
   const byId = Object.fromEntries(market.map(c => [c.id, c]));
-  const cash = wallet.usd || 0;
-  let total = cash, changeVal = 0, totalCost = 0;
+  userCash = wallet.usd || 0;
+  let total = userCash, changeVal = 0, totalCost = 0;
   const rows = [];
   let coinCount = 0;
 
@@ -66,8 +97,8 @@ async function initWallet() {
     rows.push({ coin, amount, usd, cost });
   }
   rows.sort((a, b) => b.usd - a.usd);
+  userPortfolioTotal = total;
 
-  // SAVE THE NEW TOTAL IN HISTORY
   cbSnapshotPortfolio(user.email, total);
 
   const prev = total - changeVal;
@@ -77,12 +108,12 @@ async function initWallet() {
 
   document.getElementById("totalUsd").textContent = "$" + total.toLocaleString(undefined, { maximumFractionDigits: 2 });
   document.getElementById("totalChange").innerHTML = `<span class="${cls}">${arr} ${Math.abs(pct).toFixed(2)}%</span> in last 24h`;
-  document.getElementById("cashUsd").textContent = "$" + cash.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  document.getElementById("cashUsd").textContent = "$" + userCash.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
   const plEl = document.getElementById("totalPL");
   const plPctEl = document.getElementById("totalPLPct");
   if (totalCost > 0) {
-    const pl = total - cash - totalCost;
+    const pl = total - userCash - totalCost;
     const plPct = (pl / totalCost) * 100;
     const plCls = pl >= 0 ? "up" : "down";
     plEl.className = "value " + plCls;
@@ -92,6 +123,9 @@ async function initWallet() {
     plEl.textContent = "—";
     plPctEl.textContent = "No cost basis yet";
   }
+
+  renderBreakdown(rows);
+  renderDonut(rows, userCash);
 
   const list = document.getElementById("holdings");
   if (rows.length === 0) {
@@ -124,4 +158,129 @@ async function initWallet() {
         </div>
       </div>`;
   }).join("");
+}
+
+// --- NEW: Asset Breakdown List ---
+function renderBreakdown(rows) {
+  const list = document.getElementById("breakdownList");
+  let html = `
+    <div class="breakdown-row">
+      <div class="b-asset"><span style="font-size:1.1rem">💵</span> Cash (USD)</div>
+      <div class="b-value">$${userCash.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+    </div>`;
+  
+  rows.forEach(r => {
+    html += `
+    <div class="breakdown-row">
+      <div class="b-asset"><img src="${r.coin.image}" width="16" height="16" style="border-radius:50%" /> ${r.coin.symbol.toUpperCase()}</div>
+      <div class="b-value">$${r.usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+    </div>`;
+  });
+  
+  list.innerHTML = html;
+}
+
+function renderDonut(rows, cash) {
+  const panel = document.getElementById("donutPanel");
+  const svg = document.getElementById("donutSvg");
+  const legend = document.getElementById("donutLegend");
+  const total = rows.reduce((a, r) => a + r.usd, 0) + cash;
+  if (rows.length === 0 || total <= 0) { panel.style.display = "none"; return; }
+  panel.style.display = "";
+
+  const segments = [];
+  if (cash > 0) segments.push({ label: "Cash (USD)", usd: cash, color: "#848e9c" });
+  rows.forEach((r, i) => segments.push({ label: r.coin.symbol.toUpperCase(), usd: r.usd, color: DONUT_COLORS[i % DONUT_COLORS.length] }));
+
+  let cumulative = 0;
+  const R = 40, C = 50, STROKE = 14;
+  const circumference = 2 * Math.PI * R;
+  svg.innerHTML = segments.map(s => {
+    const pct = s.usd / total;
+    const dash = pct * circumference;
+    const gap = circumference - dash;
+    const offset = -cumulative * circumference;
+    cumulative += pct;
+    return `<circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="${s.color}" stroke-width="${STROKE}" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${offset}" transform="rotate(-90 ${C} ${C})"/>`;
+  }).join("");
+
+  legend.innerHTML = segments.map(s => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${s.color}"></div>
+      <div class="legend-label">${s.label}</div>
+      <div class="legend-pct">${((s.usd / total) * 100).toFixed(1)}%</div>
+    </div>`).join("");
+}
+
+// --- NEW: Calendar Logic ---
+function bindCalendarEvents() {
+  document.getElementById("closeCalendarBtn").addEventListener("click", () => {
+    document.getElementById("calendarModal").classList.add("hidden");
+  });
+  document.getElementById("prevMonthBtn").addEventListener("click", () => {
+    currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
+    renderCalendar();
+  });
+  document.getElementById("nextMonthBtn").addEventListener("click", () => {
+    currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
+    renderCalendar();
+  });
+}
+
+function renderCalendar() {
+  const grid = document.getElementById("calendarGrid");
+  const label = document.getElementById("calendarMonthLabel");
+  const user = cbCurrentUser();
+  
+  const year = currentCalendarDate.getFullYear();
+  const month = currentCalendarDate.getMonth();
+  
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  label.textContent = `${monthNames[month]} ${year}`;
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const history = cbGetHistory(user.email);
+  const historyMap = {};
+  history.forEach(h => historyMap[h.date] = h.value);
+
+  let html = "";
+  // Day headers
+  ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(d => {
+    html += `<div class="calendar-header-day">${d}</div>`;
+  });
+
+  // Empty slots for first week
+  for (let i = 0; i < firstDay; i++) {
+    html += `<div class="calendar-day empty"></div>`;
+  }
+
+  // Days
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const valToday = historyMap[dateStr];
+    
+    // Calculate yesterday
+    const prevDate = new Date(year, month, day - 1);
+    const prevDateStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(prevDate.getDate()).padStart(2, '0')}`;
+    const valYesterday = historyMap[prevDateStr];
+
+    let dotHtml = "";
+    if (valToday !== undefined && valYesterday !== undefined) {
+      if (valToday > valYesterday) dotHtml = `<div class="dot-green"></div>`;
+      else if (valToday < valYesterday) dotHtml = `<div class="dot-red"></div>`;
+      else dotHtml = `<div class="dot-gray"></div>`;
+    } else if (valToday !== undefined) {
+      dotHtml = `<div class="dot-gray"></div>`; // First day of data
+    }
+
+    html += `
+      <div class="calendar-day">
+        <span>${day}</span>
+        ${dotHtml}
+      </div>`;
+  }
+
+  grid.innerHTML = html;
 }
