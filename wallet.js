@@ -2,10 +2,8 @@ const API   = "https://api.coingecko.com/api/v3/coins/markets";
 const QUERY = "?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false";
 const URL   = API + QUERY;
 const PROXY = "https://api.allorigins.win/raw?url=";
-const DONUT_COLORS = ["#f0b90b","#0ecb81","#f6465d","#3f88f0","#a855f7","#ff7a00","#00b8d4","#e91e63"];
 
 let currentCalendarDate = new Date();
-let userPortfolioTotal = 0;
 let userCash = 0;
 let historyMap = {};
 let selectedDateStr = null;
@@ -16,8 +14,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindFundsActions();
   bindModals();
   bindCalendarEvents();
-  cbEnablePullToRefresh(initWallet);
-  renderSkeletons();
   await initWallet();
   handleQueryParams();
 });
@@ -51,13 +47,6 @@ function bindModals() {
   });
 }
 
-function renderSkeletons() {
-  const s = (w, h, extra) => `<div class="skeleton" style="width:${w};height:${h};${extra||''}"></div>`;
-  document.getElementById("holdings").innerHTML = Array(4).fill(
-    `<div class="holding-row skeleton-row">${s('28px','28px','border-radius:50%')}<div>${s('100px','12px')}<div style="margin-top:6px">${s('60px','10px')}</div></div><div>${s('80px','12px','margin-left:auto')}</div><div>${s('60px','12px','margin-left:auto')}</div></div>`
-  ).join("");
-}
-
 async function initWallet() {
   const user = cbCurrentUser();
   const wallet = cbGetWallet(user.email) || { usd: 0 };
@@ -80,7 +69,6 @@ async function initWallet() {
   userCash = wallet.usd || 0;
   let total = userCash, changeVal = 0, totalCost = 0;
   const rows = [];
-  let coinCount = 0;
 
   for (const [id, amount] of Object.entries(wallet)) {
     if (id === "usd" || id === "user_id" || id === "updated_at" || !amount) continue;
@@ -89,11 +77,10 @@ async function initWallet() {
     const usd = amount * coin.current_price;
     const chg = usd * ((coin.price_change_percentage_24h ?? 0) / 100);
     const cost = amount * (avgPrices[id] || 0);
-    total += usd; changeVal += chg; totalCost += cost; coinCount++;
+    total += usd; changeVal += chg; totalCost += cost;
     rows.push({ coin, amount, usd, cost });
   }
   rows.sort((a, b) => b.usd - a.usd);
-  userPortfolioTotal = total;
 
   cbSnapshotPortfolio(user.email, total);
   const history = cbGetHistory(user.email);
@@ -124,7 +111,6 @@ async function initWallet() {
   }
 
   renderBreakdown(rows, total);
-  renderDonut(rows, userCash);
 
   const list = document.getElementById("holdings");
   if (rows.length === 0) {
@@ -172,10 +158,10 @@ function renderBreakdown(rows, total) {
   rows.forEach(r => {
     html += `
     <div class="breakdown-row">
-      <div class="b-asset"><img src="${r.coin.image}" width="20" height="20" /> 
+      <div class="b-asset"><img src="${r.coin.image}" /> 
         <div>
           <div>${r.coin.name} <span class="muted">(${r.coin.symbol.toUpperCase()})</span></div>
-          <div class="b-sub">${r.amount.toLocaleString()} ${r.coin.symbol.toUpperCase()}</div>
+          <div class="b-sub" style="font-size:0.75rem;color:var(--text-muted)">${r.amount.toLocaleString()} ${r.coin.symbol.toUpperCase()}</div>
         </div>
       </div>
       <div class="b-value">$${r.usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
@@ -184,38 +170,6 @@ function renderBreakdown(rows, total) {
   
   list.innerHTML = html;
   totalEl.innerHTML = `<span>Total</span> <span>$${total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>`;
-}
-
-function renderDonut(rows, cash) {
-  const panel = document.getElementById("donutPanel");
-  const svg = document.getElementById("donutSvg");
-  const legend = document.getElementById("donutLegend");
-  const total = rows.reduce((a, r) => a + r.usd, 0) + cash;
-  if (rows.length === 0 || total <= 0) { panel.style.display = "none"; return; }
-  panel.style.display = "";
-
-  const segments = [];
-  if (cash > 0) segments.push({ label: "Cash (USD)", usd: cash, color: "#848e9c" });
-  rows.forEach((r, i) => segments.push({ label: r.coin.symbol.toUpperCase(), usd: r.usd, color: DONUT_COLORS[i % DONUT_COLORS.length] }));
-
-  let cumulative = 0;
-  const R = 40, C = 50, STROKE = 14;
-  const circumference = 2 * Math.PI * R;
-  svg.innerHTML = segments.map(s => {
-    const pct = s.usd / total;
-    const dash = pct * circumference;
-    const gap = circumference - dash;
-    const offset = -cumulative * circumference;
-    cumulative += pct;
-    return `<circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="${s.color}" stroke-width="${STROKE}" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${offset}" transform="rotate(-90 ${C} ${C})"/>`;
-  }).join("");
-
-  legend.innerHTML = segments.map(s => `
-    <div class="legend-item">
-      <div class="legend-dot" style="background:${s.color}"></div>
-      <div class="legend-label">${s.label}</div>
-      <div class="legend-pct">${((s.usd / total) * 100).toFixed(1)}%</div>
-    </div>`).join("");
 }
 
 // --- CALENDAR & MINI CHART LOGIC ---
