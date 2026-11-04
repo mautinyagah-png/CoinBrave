@@ -22,20 +22,51 @@
   <main class="container">
     <section>
       <div class="wallet-hero">
-        <div class="stat-card">
-          <div class="label">Total Balance</div>
-          <div id="totalUsd" class="value gold">$—</div>
-          <div id="totalChange" class="sub">24h change: —</div>
+        <!-- Total Balance Card -->
+        <div class="stat-card expandable" id="cardTotal">
+          <div class="stat-header">
+            <div>
+              <div class="label">Total Balance</div>
+              <div id="totalUsd" class="value gold">$—</div>
+              <div id="totalChange" class="sub">24h change: —</div>
+            </div>
+            <div class="chevron">▼</div>
+          </div>
+          <div class="stat-dropdown" id="dropdownTotal">
+            <div class="muted" style="font-size:0.8rem;margin-bottom:8px">Asset Breakdown</div>
+            <div id="breakdownList"></div>
+          </div>
         </div>
-        <div class="stat-card">
-          <div class="label">Cash Available</div>
-          <div id="cashUsd" class="value">$—</div>
-          <div class="sub">Ready to trade</div>
+
+        <!-- Cash Card -->
+        <div class="stat-card expandable" id="cardCash">
+          <div class="stat-header">
+            <div>
+              <div class="label">Cash Available</div>
+              <div id="cashUsd" class="value">$—</div>
+              <div class="sub">Ready to trade</div>
+            </div>
+            <div class="chevron">▼</div>
+          </div>
+          <div class="stat-dropdown" id="dropdownCash">
+            <div class="muted" style="font-size:0.85rem">Your cash is securely held in USD and ready for instant trading. No fees to hold.</div>
+          </div>
         </div>
-        <div class="stat-card">
-          <div class="label">Total Profit / Loss</div>
-          <div id="totalPL" class="value">—</div>
-          <div id="totalPLPct" class="sub">—</div>
+
+        <!-- P/L Card -->
+        <div class="stat-card expandable" id="cardPL">
+          <div class="stat-header">
+            <div>
+              <div class="label">Total Profit / Loss</div>
+              <div id="totalPL" class="value">—</div>
+              <div id="totalPLPct" class="sub">—</div>
+            </div>
+            <div class="chevron">▼</div>
+          </div>
+          <div class="stat-dropdown" id="dropdownPL">
+            <div class="muted" style="font-size:0.85rem;margin-bottom:12px">View your historical daily performance.</div>
+            <button id="openCalendarBtn" class="btn-outline" style="width:100%;padding:8px;font-size:0.85rem">📅 Open P/L Calendar</button>
+          </div>
         </div>
       </div>
     </section>
@@ -60,6 +91,33 @@
       <div id="holdings" class="coin-list"></div>
     </section>
   </main>
+
+  <!-- P/L Calendar Modal -->
+  <div id="calendarModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Portfolio Calendar</h3>
+        <button class="modal-close" id="closeCalendarBtn">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <button class="btn-outline" id="prevMonthBtn" style="padding:4px 10px">◀</button>
+          <div id="calendarMonthLabel" style="font-weight:700;font-size:1.1rem">Month Year</div>
+          <button class="btn-outline" id="nextMonthBtn" style="padding:4px 10px">▶</button>
+        </div>
+        
+        <div class="calendar-grid" id="calendarGrid">
+          <!-- Days will be injected here -->
+        </div>
+
+        <div style="display:flex;gap:16px;justify-content:center;margin-top:16px;font-size:0.8rem">
+          <div style="display:flex;align-items:center;gap:4px"><span class="dot-green"></span> Profit</div>
+          <div style="display:flex;align-items:center;gap:4px"><span class="dot-red"></span> Loss</div>
+          <div style="display:flex;align-items:center;gap:4px"><span class="dot-gray"></span> No trades / Flat</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="auth.js"></script>
   <script src="wallet.js"></script>
