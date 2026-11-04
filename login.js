@@ -1,9 +1,6 @@
-import { auth } from './firebase.js';
-import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
-document.addEventListener("DOMContentLoaded", async () => {
-  await cbRenderNav();
-  if (await cbCurrentUser()) { location.href = "index.html"; return; }
+document.addEventListener("DOMContentLoaded", () => {
+  cbRenderNav();
+  if (cbCurrentUser()) { location.href = "index.html"; return; }
 
   const form = document.getElementById("loginForm");
   const errEl = document.getElementById("err");
@@ -17,15 +14,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     const email = document.getElementById("email").value.trim().toLowerCase();
     const password = document.getElementById("password").value;
 
+    const user = cbGetUsers().find(u => u.email === email);
+    if (!user) return showError("No account found with that email.");
+
     btn.disabled = true; btn.textContent = "Logging in…";
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      location.href = "index.html";
+      const hash = await cbHashPassword(password);
+      if (hash !== user.passwordHash) {
+        btn.disabled = false; btn.textContent = "Log In";
+        return showError("Incorrect password.");
+      }
+      cbSetSession(email);
+      const redirect = localStorage.getItem("cb_redirect");
+      if (redirect) { localStorage.removeItem("cb_redirect"); location.href = redirect; }
+      else location.href = "index.html";
     } catch (err) {
       console.error(err);
       btn.disabled = false; btn.textContent = "Log In";
-      showError(err.message.replace("Firebase: ", ""));
+      showError("Something went wrong. Try again.");
     }
   });
 });
