@@ -23,50 +23,24 @@
     <section>
       <div class="wallet-hero">
         <!-- Total Balance Card -->
-        <div class="stat-card expandable" id="cardTotal">
-          <div class="stat-header">
-            <div>
-              <div class="label">Total Balance</div>
-              <div id="totalUsd" class="value gold">$—</div>
-              <div id="totalChange" class="sub">24h change: —</div>
-            </div>
-            <div class="chevron">▼</div>
-          </div>
-          <div class="stat-dropdown" id="dropdownTotal">
-            <div class="muted" style="font-size:0.8rem;margin-bottom:8px">Asset Breakdown</div>
-            <div id="breakdownList"></div>
-          </div>
+        <div class="stat-card" id="openTotalModal">
+          <div class="label">Total Balance</div>
+          <div id="totalUsd" class="value gold">$—</div>
+          <div id="totalChange" class="sub">24h change: —</div>
         </div>
 
         <!-- Cash Card -->
-        <div class="stat-card expandable" id="cardCash">
-          <div class="stat-header">
-            <div>
-              <div class="label">Cash Available</div>
-              <div id="cashUsd" class="value">$—</div>
-              <div class="sub">Ready to trade</div>
-            </div>
-            <div class="chevron">▼</div>
-          </div>
-          <div class="stat-dropdown" id="dropdownCash">
-            <div class="muted" style="font-size:0.85rem">Your cash is securely held in USD and ready for instant trading. No fees to hold.</div>
-          </div>
+        <div class="stat-card" id="openCashModal">
+          <div class="label">Cash Available</div>
+          <div id="cashUsd" class="value">$—</div>
+          <div class="sub">Ready to trade</div>
         </div>
 
         <!-- P/L Card -->
-        <div class="stat-card expandable" id="cardPL">
-          <div class="stat-header">
-            <div>
-              <div class="label">Total Profit / Loss</div>
-              <div id="totalPL" class="value">—</div>
-              <div id="totalPLPct" class="sub">—</div>
-            </div>
-            <div class="chevron">▼</div>
-          </div>
-          <div class="stat-dropdown" id="dropdownPL">
-            <div class="muted" style="font-size:0.85rem;margin-bottom:12px">View your historical daily performance.</div>
-            <button id="openCalendarBtn" class="btn-outline" style="width:100%;padding:8px;font-size:0.85rem">📅 Open P/L Calendar</button>
-          </div>
+        <div class="stat-card" id="openPLModal">
+          <div class="label">Total Profit / Loss</div>
+          <div id="totalPL" class="value">—</div>
+          <div id="totalPLPct" class="sub">—</div>
         </div>
       </div>
     </section>
@@ -92,28 +66,64 @@
     </section>
   </main>
 
-  <!-- P/L Calendar Modal -->
-  <div id="calendarModal" class="modal-overlay hidden">
+  <!-- MODAL 1: Total Balance Breakdown -->
+  <div id="totalModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
-        <h3>Portfolio Calendar</h3>
-        <button class="modal-close" id="closeCalendarBtn">×</button>
+        <h3>Asset Breakdown</h3>
+        <button class="modal-close close-modal">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="breakdownList"></div>
+        <div class="b-total" id="breakdownTotal"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: Cash Info -->
+  <div id="cashModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Cash Available</h3>
+        <button class="modal-close close-modal">×</button>
+      </div>
+      <div class="modal-body" style="text-align:center">
+        <div style="font-size:3rem;margin-bottom:12px">💵</div>
+        <h2 style="color:var(--up);margin-bottom:8px" id="modalCashValue">$0.00</h2>
+        <p class="muted" style="font-size:0.9rem">This is your uninvested USD balance. You can use this cash to buy any coin instantly with zero conversion fees.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: P/L Calendar & Chart -->
+  <div id="plModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Profit / Loss Calendar</h3>
+        <button class="modal-close close-modal">×</button>
       </div>
       <div class="modal-body">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <button class="btn-outline" id="prevMonthBtn" style="padding:4px 10px">◀</button>
+          <button class="btn-outline" id="prevMonthBtn" style="padding:6px 12px">◀</button>
           <div id="calendarMonthLabel" style="font-weight:700;font-size:1.1rem">Month Year</div>
-          <button class="btn-outline" id="nextMonthBtn" style="padding:4px 10px">▶</button>
+          <button class="btn-outline" id="nextMonthBtn" style="padding:6px 12px">▶</button>
         </div>
         
-        <div class="calendar-grid" id="calendarGrid">
-          <!-- Days will be injected here -->
+        <div class="calendar-grid" id="calendarGrid"></div>
+
+        <div style="display:flex;gap:16px;justify-content:center;margin-top:20px;font-size:0.8rem">
+          <div style="display:flex;align-items:center;gap:6px"><span class="dot-green"></span> Profit</div>
+          <div style="display:flex;align-items:center;gap:6px"><span class="dot-red"></span> Loss</div>
+          <div style="display:flex;align-items:center;gap:6px"><span class="dot-gray"></span> No trades</div>
         </div>
 
-        <div style="display:flex;gap:16px;justify-content:center;margin-top:16px;font-size:0.8rem">
-          <div style="display:flex;align-items:center;gap:4px"><span class="dot-green"></span> Profit</div>
-          <div style="display:flex;align-items:center;gap:4px"><span class="dot-red"></span> Loss</div>
-          <div style="display:flex;align-items:center;gap:4px"><span class="dot-gray"></span> No trades / Flat</div>
+        <!-- Mini Chart Area -->
+        <div class="mini-chart-container">
+          <div class="mini-chart-header">
+            <span id="chartDateLabel">Select a day</span>
+            <span id="chartValueLabel">—</span>
+          </div>
+          <div class="mini-chart-bars" id="miniChartBars"></div>
         </div>
       </div>
     </div>
