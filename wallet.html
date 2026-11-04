@@ -22,21 +22,18 @@
   <main class="container">
     <section>
       <div class="wallet-hero">
-        <!-- Total Balance Card -->
         <div class="stat-card" id="openTotalModal">
           <div class="label">Total Balance</div>
           <div id="totalUsd" class="value gold">$—</div>
           <div id="totalChange" class="sub">24h change: —</div>
         </div>
 
-        <!-- Cash Card -->
         <div class="stat-card" id="openCashModal">
           <div class="label">Cash Available</div>
           <div id="cashUsd" class="value">$—</div>
           <div class="sub">Ready to trade</div>
         </div>
 
-        <!-- P/L Card -->
         <div class="stat-card" id="openPLModal">
           <div class="label">Total Profit / Loss</div>
           <div id="totalPL" class="value">—</div>
@@ -52,21 +49,13 @@
       </div>
     </section>
 
-    <section class="panel" id="donutPanel" style="display:none">
-      <h2>Portfolio Allocation</h2>
-      <div class="donut-wrap">
-        <svg class="donut-svg" id="donutSvg" viewBox="0 0 100 100"></svg>
-        <div class="donut-legend" id="donutLegend"></div>
-      </div>
-    </section>
-
     <section class="panel">
       <h2>Your Holdings</h2>
       <div id="holdings" class="coin-list"></div>
     </section>
   </main>
 
-  <!-- MODAL 1: Total Balance Breakdown -->
+  <!-- MODALS -->
   <div id="totalModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -80,7 +69,6 @@
     </div>
   </div>
 
-  <!-- MODAL 2: Cash Info -->
   <div id="cashModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -95,7 +83,6 @@
     </div>
   </div>
 
-  <!-- MODAL 3: P/L Calendar & Chart -->
   <div id="plModal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
@@ -117,7 +104,6 @@
           <div style="display:flex;align-items:center;gap:6px"><span class="dot-gray"></span> No trades</div>
         </div>
 
-        <!-- Mini Chart Area -->
         <div class="mini-chart-container">
           <div class="mini-chart-header">
             <span id="chartDateLabel">Select a day</span>
