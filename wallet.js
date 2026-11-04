@@ -7,7 +7,6 @@ const DONUT_COLORS = ["#f0b90b","#0ecb81","#f6465d","#3f88f0","#a855f7","#ff7a00
 let currentCalendarDate = new Date();
 let userPortfolioTotal = 0;
 let userCash = 0;
-let currentMarketData = [];
 let historyMap = {};
 let selectedDateStr = null;
 
@@ -70,7 +69,6 @@ async function initWallet() {
     if (!res.ok) res = await fetch(PROXY + encodeURIComponent(URL));
     if (!res.ok) throw new Error(`API error ${res.status}`);
     market = await res.json();
-    currentMarketData = market;
     cbCheckAlerts(market);
   } catch (err) {
     console.error(err);
@@ -97,7 +95,6 @@ async function initWallet() {
   rows.sort((a, b) => b.usd - a.usd);
   userPortfolioTotal = total;
 
-  // Save history snapshot
   cbSnapshotPortfolio(user.email, total);
   const history = cbGetHistory(user.email);
   historyMap = {};
@@ -250,20 +247,16 @@ function renderCalendar() {
     html += `<div class="calendar-header-day">${d}</div>`;
   });
 
-  // Empty slots
   for (let i = 0; i < firstDay; i++) {
     html += `<div class="calendar-day empty"></div>`;
   }
 
-  // Track daily P/L for the mini chart
   const monthPL = []; 
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const todayStr = new Date().toISOString().slice(0, 10);
-    
     const valToday = historyMap[dateStr];
-    
     const prevDate = new Date(year, month, day - 1);
     const prevDateStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(prevDate.getDate()).padStart(2, '0')}`;
     const valYesterday = historyMap[prevDateStr];
@@ -295,21 +288,16 @@ function renderCalendar() {
   grid.innerHTML = html;
   renderMiniChart(monthPL);
 
-  // Add click listeners to days
   grid.querySelectorAll(".calendar-day:not(.empty)").forEach(dayEl => {
     dayEl.addEventListener("click", () => {
       selectedDateStr = dayEl.dataset.date;
-      
-      // Update selected visual
       grid.querySelectorAll(".calendar-day").forEach(d => d.classList.remove("selected"));
       dayEl.classList.add("selected");
-
       const pl = parseFloat(dayEl.dataset.pl);
       updateChartSelection(pl, selectedDateStr);
     });
   });
 
-  // If a date was already selected, keep it highlighted
   if (selectedDateStr) {
     const activeEl = grid.querySelector(`[data-date="${selectedDateStr}"]`);
     if (activeEl) {
@@ -326,7 +314,6 @@ function renderMiniChart(data) {
   const container = document.getElementById("miniChartBars");
   if (!data.length) { container.innerHTML = `<div class="muted" style="font-size:0.8rem;margin:auto">No data for this month</div>`; return; }
 
-  // Find max absolute value for scaling
   const maxVal = Math.max(...data.map(d => Math.abs(d.value)), 1);
 
   container.innerHTML = data.map(d => {
